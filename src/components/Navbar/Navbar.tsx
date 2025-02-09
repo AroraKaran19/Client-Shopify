@@ -7,7 +7,7 @@ import { LayoutContext } from "../../layout";
 import HamburgerIcon from "../../assets/svg/HamburgerIcon";
 
 const Navbar = () => {
-  const { notifications } = useContext(LayoutContext);
+  const { notifications, sidebarState, setSidebarState } = useContext(LayoutContext);
   const [notificationCount, setNotificationCount] = useState(
     notifications.length
   );
@@ -19,7 +19,10 @@ const Navbar = () => {
   return (
     <div className="navbar w-full flex gap-2 items-center h-[56px] bg-[#1a1a1a] py-2 sticky top-0 z-[500]">
       {/* Hamburger Menu */}
-      <button className="hamburger-btn flex-none p-1 ml-3 active:shadow-[inset_0_-2px_4px_rgba(255,255,255,0.2)] hover:shadow-sm hover:shadow-white/60 active:bg-[rgb(26,26,26)] text-white active:text-white/70 rounded-lg sm:flex hidden">
+      <button
+        className={`hamburger-btn flex-none p-1 ml-3 active:shadow-[inset_0_-2px_4px_rgba(255,255,255,0.2)] hover:shadow-sm hover:shadow-white/60 active:bg-[rgb(26,26,26)] ${sidebarState ? "bg-[rgb(26,26,26)] shadow-[inset_0_-2px_4px_rgba(255,255,255,0.2)]" : ''} text-white active:text-white/70 rounded-lg sm:flex hidden`}
+        onClick={() => setSidebarState && setSidebarState(!sidebarState)}
+      >
         <HamburgerIcon className="size-6" />
       </button>
       {/* Logo */}

@@ -32,3 +32,16 @@ body {
   border-top: 3px solid black;
   animation: spin 1s linear infinite;
 }
+
+@keyframes sidebarWrapper {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 0;
+  }
+}
+
+.sidebar_open_wrapper {
+  animation: sidebarWrapper 0.2s ease-in-out;
+}

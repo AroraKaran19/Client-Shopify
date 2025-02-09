@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import SearchIcon from "../../../assets/svg/SearchIcon";
 import FilterIcon from "../../../assets/svg/FilterIcon";
 import CloseIcon from "../../../assets/svg/CloseIcon";
 import FilterTag from "./FilterTag";
 import LoadingIcon from "../../../assets/LoadingIcon";
+import { LayoutContext } from "../../../layout";
 
 const Searchbar = () => {
-  const [search, setSearch] = useState<string>("");
+  const { search, setSearch, addFilter, setAddFilter } = useContext(LayoutContext) as {
+    search: string;
+    setSearch: React.Dispatch<React.SetStateAction<string>>;
+    addFilter: string;
+    setAddFilter: React.Dispatch<React.SetStateAction<string>>;
+  };
   const searchBar = useRef<HTMLInputElement>(null);
   const [searchBoxFocused, setSearchBoxFocused] = useState<boolean>(false);
   const [filterMode, setFilterMode] = useState<boolean>(false);
@@ -123,14 +129,22 @@ const Searchbar = () => {
     };
   }, [selectedFilter, search]);
 
+  useEffect(() => {
+    console.log(selectedFilter);
+  }, [selectedFilter]);
+
+  useEffect(() => {
+    if (addFilter) {
+      setSelectedFilter(addFilter);
+      searchBar.current?.focus();
+      setAddFilter("");
+    }
+  }, [addFilter]);
+
   const removeFilter = () => {
     setSelectedFilter("");
     searchBar.current?.focus();
   };
-
-  useEffect(() => {
-    console.log(selectedFilter);
-  }, [selectedFilter]);
 
   return (
     <div
@@ -192,7 +206,7 @@ const Searchbar = () => {
                 />
                 <FilterIcon
                   className="size-4 fill-black/60 hover:fill-black/80"
-                  mode={filterMode}
+                  mode={filterMode || selectedFilter.length > 0}
                   onClick={() => {
                     search.split(" ").slice(-1)[0] != "/"
                       ? setSearch(search + (search.length > 0 ? " " : "") + "/")
@@ -273,7 +287,7 @@ const Searchbar = () => {
               // This is the default search screen
               <div className="search-Screen h-[200px]">
                 {selectedFilter.length === 0 && (
-                  <div className="default-filters-list flex items-center gap-2 h-fit">
+                  <div className="default-filters-list flex flex-wrap items-center gap-2 h-fit">
                     {searchFilters.map((filter, index) => {
                       if (!selectedFilter.includes(filter) && index < 5) {
                         return (

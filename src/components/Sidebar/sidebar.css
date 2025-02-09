@@ -1,0 +1,39 @@
+.sidebar .sidebar-nav-links .sidebar-sub-menu-link:hover .sidebar-nav-link-icon {
+    opacity: 50%;
+}
+
+.sidebar .sidebar-nav-links .sidebar-nav-link .sidebar-sub-menu-link:nth-last-child(1) {
+    margin-bottom: 8px;
+}
+
+.sidebar .sidebar-nav-links .sidebar-nav-link .outer-wrapper:hover::before {
+    content: "View your online store";
+    position: absolute;
+    z-index: 500;
+    top: -90%;
+    right: 0;
+    width: fit-content;
+    white-space: nowrap;
+    padding: 6px;
+    background: white;
+    color: black;
+    border-radius: 5px;
+    -moz-border-radius: 5px;
+    -webkit-border-radius: 5px;
+    font-size: 14px;
+    font-weight: 400;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar .sidebar-nav-links .sidebar-nav-link .outer-wrapper:hover::after {
+    content: '';
+    display: block;
+    z-index: 501;
+    width: 0;
+    height: 0;
+    position: absolute;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid white;
+    top: -20%;
+}

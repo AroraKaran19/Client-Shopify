@@ -1,34 +1,37 @@
 .navbar .search-bar .button-overlay-placeholder .search-overlay-button {
-    background-color: rgba(255, 255, 255, 0.08);
-    font-size: 10px;
-    padding: 0.125rem 0.35rem;
-    text-align: center;
-    border-radius: 3px;
+  background-color: rgba(255, 255, 255, 0.08);
+  font-size: 10px;
+  padding: 0.125rem 0.35rem;
+  text-align: center;
+  border-radius: 3px;
 }
 
 .navbar .filter span {
-    background-color: rgba(0, 0, 0, 0.1);
-    padding: 0.125rem 0.45rem;
-    border-radius: 9999px;
-    font-size: 12px;
-    width: fit-content;
-    font-weight: 500;
-    cursor: pointer;
+  background-color: rgba(0, 0, 0, 0.1);
+  padding: 0.125rem 0.45rem;
+  border-radius: 9999px;
+  font-size: 12px;
+  width: fit-content;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 .navbar .filter-Screen {
+  .filterby-title {
+    font-size: 13px;
+    color: rgba(0, 0, 0, 0.7);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1rem;
+  }
 
-    .filterby-title {
-        font-size: 13px;
-        color: rgba(0, 0, 0, 0.7);
-        font-weight: 600;
-        letter-spacing: 0;
-        line-height: 1rem;
-    }
-    
-    .filter:hover {
-        background-color: rgba(0, 0, 0, 0.07);
-        border-radius: 5px;
-        cursor: pointer;
-    }
+  .filter:hover {
+    background-color: rgba(0, 0, 0, 0.07);
+    border-radius: 5px;
+    cursor: pointer;
+  }
+}
+
+.navbar .user-mgnt .user-btn:active .user-image-container {
+  background-color: rgb(22, 161, 27);
 }

@@ -1,11 +1,7 @@
-import Layout from "./layout"
+import AppRouter from "./Routes/AppRouter";
 
 function App() {
-  return (
-    <Layout>
-      <div className="h-[2000px] w-full">hey</div>
-    </Layout>
-  )
+  return <AppRouter />;
 }
 
-export default App
+export default App;
