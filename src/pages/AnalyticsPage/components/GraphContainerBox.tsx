@@ -18,7 +18,7 @@ const GraphContainerBox = ({
         .replace(
           /\s+/g,
           "-"
-        )}-graph w-max h-max flex-shrink-0 flex flex-col gap-1 bg-white rounded-xl shadow-[0_0_3px_rgba(0,0,0,0.2)] sm:w-full sm:last:w-full ${
+        )}-graph w-max flex-shrink-0 flex flex-col gap-1 bg-white rounded-xl shadow-[0_0_3px_rgba(0,0,0,0.2)] sm:w-full sm:last:w-full ${
         className || ""
       }`}
       style={style}
