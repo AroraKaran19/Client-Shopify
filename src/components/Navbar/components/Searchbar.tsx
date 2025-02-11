@@ -111,7 +111,8 @@ const Searchbar = () => {
   }, [search]);
 
   useEffect(() => {
-    const handleBackspace = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+
       if (e.key === "Backspace") {
         if (search.length === 0) {
           if (selectedFilter.length > 0) {
@@ -121,17 +122,18 @@ const Searchbar = () => {
           }
         }
       }
+      if (e.ctrlKey && e.key === "k") {
+        e.preventDefault();
+        setSearchBoxFocused(true);
+        searchBar.current?.focus();
+      }
     };
-    document.addEventListener("keydown", handleBackspace);
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("keydown", handleBackspace);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [selectedFilter, search]);
-
-  useEffect(() => {
-    console.log(selectedFilter);
-  }, [selectedFilter]);
 
   useEffect(() => {
     if (addFilter) {
@@ -261,9 +263,7 @@ const Searchbar = () => {
                           onClick={() => {
                             setSelectedFilter(filter);
                             setSearch(
-                              search
-                                .toLowerCase()
-                                .replace(`/${filter.toLowerCase()}`, "")
+                              search.toLowerCase().replace(/\/.*/, "")
                             );
                             searchBar.current?.focus();
                           }}

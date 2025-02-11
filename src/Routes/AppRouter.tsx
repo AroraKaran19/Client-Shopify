@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Layout from "../layout";
-import AnalyticsPage from "../pages/AnalyticsPage";
+import AnalyticsPage from "../pages/AnalyticsPage/AnalyticsPage";
 import NotFound from "../pages/NotFound";
 
 const AppRouter = () => {
