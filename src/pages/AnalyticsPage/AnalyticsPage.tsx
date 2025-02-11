@@ -10,7 +10,7 @@ const AnalyticsPage = () => {
   const [focus, setFocus] = useState(false);
 
   return (
-    <div className={`analytics-page p-6 pb-5 flex flex-col gap-5 ${focus ? "absolute top-0 left-0 w-screen h-screen z-[2000] bg-[#f1f1f1] transition-all duration-150 ease-in-out" : ""}`}>
+    <div className={`analytics-page p-6 pb-5 flex flex-col gap-5 ${focus ? "absolute top-0 left-0 w-full h-max z-[2000] bg-[#f1f1f1] transition-all duration-150 ease-in-out" : ""}`}>
       <PageHeading focus={focus} setFocus={setFocus} />
       <ActionBtns />
       <OverviewGraphs />

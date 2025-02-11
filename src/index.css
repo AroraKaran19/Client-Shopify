@@ -46,3 +46,9 @@ body {
 .sidebar_open_wrapper {
   animation: sidebarWrapper 0.2s ease-in-out;
 }
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+  }
+}

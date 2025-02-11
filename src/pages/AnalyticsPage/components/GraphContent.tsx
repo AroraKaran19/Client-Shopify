@@ -89,7 +89,7 @@ const GraphContent = () => {
               className="h-[344px] !w-full"
             />
             <GraphContainerBox
-              graphInfo={data[1]}
+              graphInfo={data[3]}
               className="h-[344px] !w-full"
             />
             <GraphContainerBox

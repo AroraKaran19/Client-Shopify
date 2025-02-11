@@ -37,14 +37,15 @@ const Layout = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const main_content = document.querySelector("main");
-    if (main_content) {
-      main_content.addEventListener("click", () => {
+    const sidebar_open_wrapper = document.querySelector(".sidebar_open_wrapper");
+    if (sidebar_open_wrapper) {
+      sidebar_open_wrapper.addEventListener("click", () => {
         if (sidebarOpen) {
           setSidebarOpen(false);
         }
       });
     }
-    if (sidebarOpen && main_content) {
+    if (sidebarOpen && main_content && width <= 768) {
       main_content.style.overflow = "hidden";
     } else if (!sidebarOpen && main_content) {
       main_content.style.overflow = "auto";

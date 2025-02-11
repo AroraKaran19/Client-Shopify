@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import BelowIcon from "../../../assets/sidebarNav/BelowIcon";
 import { SidebarLink } from "../Sidebar";
 import { Link } from "react-router-dom";
+import { LayoutContext } from "../../../layout";
 
 const NavLink = ({
   navLink,
@@ -14,6 +15,7 @@ const NavLink = ({
 }) => {
 
   const [showSubMenu, setShowSubMenu] = useState<boolean>(false);
+  const { setSidebarState } = useContext(LayoutContext);
 
   useEffect(() => {
     if (navLink.active || navLink.subMenu?.some((subLink) => subLink.active)) {
@@ -32,6 +34,7 @@ const NavLink = ({
     >
       <Link
         to={navLink.link == "" ? navLink.subMenu?.[0].link ?? "#" : navLink.link} 
+        onClick={() => setSidebarState && navLink.link !== "" && setSidebarState(false)}
         className={`flex items-center w-full px-2 py-1 sm:py-[6px] hover:bg-white/30 rounded-lg relative ${
           navLink?.active ? "!bg-[#fafafa]" : ""
         }`}

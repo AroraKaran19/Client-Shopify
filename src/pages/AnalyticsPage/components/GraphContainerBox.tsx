@@ -1,6 +1,8 @@
 import React from "react";
 import { GraphContentData } from "../utils";
 import MinusIcon from "../../../assets/svg/MinusIcon";
+import MultiAxisChart from "../../../components/Graphs/MultiAxisChart";
+import MulitAxisChartPercent from "../../../components/Graphs/MulitAxisChartPercent";
 
 const GraphContainerBox = ({
   graphInfo,
@@ -38,15 +40,29 @@ const GraphContainerBox = ({
             <MinusIcon className="size-4 text-[#303030]" />
           )}
         </div>
-        <div className={`graph-container rounded-lg h-full w-full flex items-center justify-center ${graphInfo.value ? "bg-[#f1f1f1]" : ""}`}>
-          {!graphInfo.value ? (
+        <div
+          className={`graph-container rounded-lg h-full w-full flex items-center justify-center ${
+            !graphInfo.graphData ? "bg-[#f1f1f1]" : ""
+          }`}
+        >
+          {!graphInfo.graphData ? (
             <p className="text-[rgb(97,97,97)] font-semibold text-center text-[13px] leading-5">
               There was no data found for this date range
             </p>
           ) : (
-            <p className="text-[rgb(97,97,97)] font-semibold text-center text-[13px] leading-5">
-              No data available
-            </p>
+            (graphInfo.type === "ruppee" &&
+              typeof graphInfo.graphData !== "number" &&
+              graphInfo.graphData && (
+                <MultiAxisChart
+                  data={graphInfo.graphData}
+                  minMax={graphInfo?.minMax}
+                  steps={graphInfo?.steps}
+                />
+              )) ||
+            (graphInfo.type === "percent" &&
+              typeof graphInfo.graphData !== "number" && (
+                <MulitAxisChartPercent data={graphInfo.graphData} />
+            ))
           )}
         </div>
       </div>

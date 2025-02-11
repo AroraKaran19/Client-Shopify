@@ -1,15 +1,22 @@
 import { JSX } from "react";
+import { graphRow1Data, graphRow2Data } from "./graphData";
+import { ChartData } from "../../components/Graphs/MultiAxisChart";
 
 export type GraphContentData = {
   name: string;
   value?: string;
+  type?: "ruppee" | "percent" | "number" | "line" | "donut";
   dataContent?: JSX.Element;
+  graphData?: ChartData | number;
+  minMax?: { min: number; max: number };
+  steps?: number;
 };
 
 export const graphData: GraphContentData[] = [
   {
     name: "Total sales over time",
     value: "₹0",
+    type: "ruppee",
     dataContent: (
       <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
         <h3 className="content-heading text-[#303030] font-semibold">
@@ -27,10 +34,12 @@ export const graphData: GraphContentData[] = [
         </p>
       </div>
     ),
+    graphData: graphRow1Data
   },
   {
     name: "Conversion rate over time",
     value: "0%",
+    type: "percent",
     dataContent: (
       <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
         <h3 className="content-heading text-[#303030] font-semibold">
@@ -47,10 +56,14 @@ export const graphData: GraphContentData[] = [
         </p>
       </div>
     ),
+    graphData: graphRow2Data
   },
   {
     name: "Average order value over time",
     value: "₹0",
+    type: "ruppee",
+    minMax: { min: 0, max: 10 },
+    steps: 10,
     dataContent: (
       <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
         <h3 className="content-heading text-[#303030] font-semibold">
@@ -67,9 +80,12 @@ export const graphData: GraphContentData[] = [
         </p>
       </div>
     ),
+    graphData: graphRow1Data
   },
   {
     name: "Total sales by product",
+    type: "donut",
+    value: "₹0",
     dataContent: (
       <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
         <h3 className="content-heading text-[#303030] font-semibold">
@@ -86,9 +102,12 @@ export const graphData: GraphContentData[] = [
         </p>
       </div>
     ),
+    graphData: 1
   },
   {
     name: "Sessions by social referrer",
+    value: "0",
+    type: "donut",
     dataContent: (
       <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
         <h3 className="content-heading text-[#303030] font-semibold">
