@@ -1,6 +1,6 @@
 import React from "react";
 
-const CalenderBtnIcon = ({
+const CalendarBtnIcon = ({
   className,
   style,
   onClick,
@@ -25,4 +25,4 @@ const CalenderBtnIcon = ({
   );
 };
 
-export default CalenderBtnIcon;
+export default CalendarBtnIcon;

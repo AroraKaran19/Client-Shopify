@@ -1,18 +1,32 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { GraphContentData } from "../utils";
 import MinusIcon from "../../../assets/svg/MinusIcon";
-import MultiAxisChart from "../../../components/Graphs/MultiAxisChart";
+import MultiAxisChart, { ChartData } from "../../../components/Graphs/MultiAxisChart";
 import MulitAxisChartPercent from "../../../components/Graphs/MulitAxisChartPercent";
 
 const GraphContainerBox = ({
   graphInfo,
+  graphData,
   className,
   style,
 }: {
   graphInfo: GraphContentData;
+  graphData?: ChartData | number;
   className?: string;
   style?: React.CSSProperties;
 }) => {
+
+  const symbol = useMemo(() => {
+    switch (graphInfo.type) {
+      case "ruppee":
+        return "₹";
+      case "percent":
+        return "%";
+      default:
+        return "";
+    }
+  }, [graphInfo.type]);
+  
   return (
     <div
       className={`${graphInfo.name
@@ -35,33 +49,31 @@ const GraphContainerBox = ({
       </div>
       <div className="graph-info flex gap-4 flex-col justify-between px-4 pb-4 h-full w-full">
         <div className="font-semibold text-xl !leading-6 flex gap-2 items-center h-max">
-          <span>{graphInfo.value}</span>
+          <span>{graphInfo.value ?? symbol}</span>
           {graphInfo.value && graphInfo.value.match(/-?\d+/)?.[0] == "0" && (
             <MinusIcon className="size-4 text-[#303030]" />
           )}
         </div>
         <div
-          className={`graph-container rounded-lg h-full w-full flex items-center justify-center ${
-            !graphInfo.graphData ? "bg-[#f1f1f1]" : ""
-          }`}
+          className={`graph-container rounded-lg h-full w-full flex items-center justify-center`}
         >
-          {!graphInfo.graphData ? (
+          {!graphData ? (
             <p className="text-[rgb(97,97,97)] font-semibold text-center text-[13px] leading-5">
               There was no data found for this date range
             </p>
           ) : (
             (graphInfo.type === "ruppee" &&
-              typeof graphInfo.graphData !== "number" &&
-              graphInfo.graphData && (
+              typeof graphData !== "number" &&
+              graphData && (
                 <MultiAxisChart
-                  data={graphInfo.graphData}
+                  data={graphData}
                   minMax={graphInfo?.minMax}
                   steps={graphInfo?.steps}
                 />
               )) ||
             (graphInfo.type === "percent" &&
-              typeof graphInfo.graphData !== "number" && (
-                <MulitAxisChartPercent data={graphInfo.graphData} />
+              typeof graphData !== "number" && (
+                <MulitAxisChartPercent data={graphData} />
             ))
           )}
         </div>
