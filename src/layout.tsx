@@ -203,7 +203,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
       }}
     >
       <Navbar />
-      <div className="w-full flex h-[calc(100vh-56px)] rounded-t-xl overflow-hidden">
+      <div className="w-full flex h-[calc(100vh-56px)] max-h-[calc(100vh-56px)] rounded-t-xl overflow-hidden">
         {sidebarOpen && (
           <div className="sidebar_open_wrapper bg-black/30 backdrop-blur-sm absolute top-0 h-screen w-full opacity-100 z-20 transition-all ease-in-out duration-500 left-0 sm:flex hidden"></div>
         )}

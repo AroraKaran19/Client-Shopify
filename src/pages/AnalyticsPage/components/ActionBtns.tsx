@@ -41,7 +41,7 @@ const ActionBtns = () => {
         }}
       >
         <span className="text-xs !leading-3 font-[600] select-none">
-          Compare to: Yesterday
+          No comparison
         </span>
       </div>
       {(changeStartCalendar) && (
