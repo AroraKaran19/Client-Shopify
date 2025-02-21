@@ -63,7 +63,7 @@ const MultiAxisChart = ({ data, minMax, steps }: { data: ChartData, minMax?: { m
     scales: {
       y: {
         min: minMax?.min ?? 0,
-        max: minMax?.max ?? 10,
+        max: minMax?.max ?? undefined,
         grid: {
           display: true,
           color: "#ddd",

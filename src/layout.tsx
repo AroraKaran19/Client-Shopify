@@ -34,7 +34,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const [search, setSearch] = useState<string>("");
   const [addFilter, setAddFilter] = useState<string>("");
   const [width, setWidth] = useState<number>(window.innerWidth);
-  const [selectedValues, setSelectedValues] = useState<{ range1?: Date; range2?: Date }>({});
+  const [selectedValues, setSelectedValues] = useState<{ range1?: Date; range2?: Date }>({ range1: new Date(), range2: new Date() });
   const [durationOptions, setDurationOptions] = useState<DurationOption[]>([
     {
       name: "Today",

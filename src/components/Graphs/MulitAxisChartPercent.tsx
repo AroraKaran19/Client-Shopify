@@ -37,9 +37,6 @@ const MulitAxisChartPercent = ( { data } : { data : ChartData }) => {
 
   const options = {
     responsive: true,
-    interaction: {
-      intersect: false,
-    },
     stacked: false,
     plugins: {
       legend: {

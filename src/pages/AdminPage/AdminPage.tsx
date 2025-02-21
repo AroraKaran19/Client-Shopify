@@ -69,7 +69,6 @@ const AdminPage = () => {
     if (data) {
       setCopyData(data);
     }
-		console.log(data);
   }, [data]);
 
   useEffect(() => {
@@ -127,7 +126,6 @@ const AdminPage = () => {
           copy[currentSelection as keyof DateData] = unsavedChanges.map(
             (value, index) => ({ time: timeLabels[index], value })
           );
-          console.log(copy);
           return copy;
         });
         setChangeValue(false);

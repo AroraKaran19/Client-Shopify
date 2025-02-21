@@ -3,7 +3,7 @@ import { JSX } from "react";
 export type GraphContentData = {
   name: string;
   value?: string;
-  type: "ruppee" | "percent" | "number" | "line" | "donut";
+  type: "ruppee" | "percent" | "number" | "line" | "donut" | "image";
   dataContent: JSX.Element;
   minMax?: { min: number; max: number };
   steps?: number;
@@ -38,10 +38,12 @@ export function generateGraphData({
   value,
   type,
   dataContent,
+  minMax,
+  steps,
 }: {
   name: string;
   value?: string;
-  type: "ruppee" | "percent" | "number" | "line" | "donut";
+  type: "ruppee" | "percent" | "number" | "line" | "donut" | "image";
   dataContent: { heading: string; text: string; formula?: { prefix: string, suffix: string } };
   minMax?: { min: number; max: number };
   steps?: number;
@@ -55,5 +57,7 @@ export function generateGraphData({
       dataContent.text,
       dataContent.formula
     ),
+    minMax: minMax,
+    steps: steps,
   };
 }
