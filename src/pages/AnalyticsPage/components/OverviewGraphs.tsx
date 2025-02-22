@@ -1,17 +1,52 @@
-import { JSX } from "react";
+import { JSX, useContext, useEffect, useState } from "react";
 import MinusIcon from "../../../assets/svg/MinusIcon";
+import MultiAxisChart from "@/components/Graphs/MultiAxisChart";
+import { formatDate, GraphInputData } from "./GraphContent";
+import { LayoutContext } from "@/layout";
+import { fetchAllData } from "@/firebase/firebase";
 
 type OverviewData = {
   name: string;
-  value: string;
+  type: string;
   dataContent: JSX.Element;
 };
 
 const OverviewGraphs = () => {
+  const [fetchedData, setFetchedData] = useState<GraphInputData>();
+  const { selectedValues } = useContext(LayoutContext);
+  const timeLabels = Array.from({ length: 24 }, (_, i) => {
+    const hour = i % 12 === 0 ? 12 : i % 12;
+    const period = i < 12 ? "AM" : "PM";
+    return `${hour}:00 ${period}`;
+  });
+
+  const fetchData = async () => {
+    if (selectedValues.range1 && selectedValues.range2) {
+      return fetchAllData(
+        formatDate(selectedValues.range1),
+        formatDate(selectedValues.range2)
+      );
+    }
+  };
+
+  useEffect(() => {
+    setFetchedData(undefined);
+    const result = fetchData();
+    result.then((data) => {
+      setFetchedData(data);
+    });
+  }, [selectedValues]);
+
+  useEffect(() => {
+    if (fetchedData) {
+      console.log(fetchedData?.gross_sales.dataset);
+    }
+  }, [fetchedData]);
+
   const data: OverviewData[] = [
     {
       name: "Gross sales",
-      value: "₹0",
+      type: "ruppee",
       dataContent: (
         <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
           <h3 className="content-heading text-[#303030] font-semibold">
@@ -26,7 +61,7 @@ const OverviewGraphs = () => {
     },
     {
       name: "Returning customer rate",
-      value: "0%",
+      type: "percent",
       dataContent: (
         <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
           <h3 className="content-heading text-[#303030] font-semibold">
@@ -47,7 +82,7 @@ const OverviewGraphs = () => {
     },
     {
       name: "Orders fulfilled",
-      value: "0",
+      type: "number",
       dataContent: (
         <div className="content-data flex flex-col">
           <h3 className="content-heading text-sm text-[#303030] font-semibold">
@@ -61,7 +96,7 @@ const OverviewGraphs = () => {
     },
     {
       name: "Orders",
-      value: "0",
+      type: "number",
       dataContent: (
         <div className="content-data flex flex-col">
           <h3 className="content-heading text-sm text-[#303030] font-semibold">
@@ -95,14 +130,43 @@ const OverviewGraphs = () => {
               {item.dataContent}
             </div>
           </div>
-          <div className="overview-info flex justify-between items-center">
+          <div className="overview-info flex justify-between items-center gap-8 h-fit">
             <div className="font-semibold text-sm flex gap-2 items-center">
-              <span>{item.value}</span>
-              {item.value.match(/-?\d+/)?.[0] == "0" && (
-                <MinusIcon className="size-4 text-[#303030]" />
+              <span>
+                {item.type === "ruppee" && "₹"}
+                {fetchedData &&
+                  eval(
+                    fetchedData[
+                      item.name.replace(/\s+/g, "_").toLowerCase()
+                    ].dataset[0].data.join("+")
+                  )}
+                {item.type === "percent" && "%"}
+              </span>
+              {fetchedData &&
+                eval(
+                  fetchedData[
+                    item.name.replace(/\s+/g, "_").toLowerCase()
+                  ].dataset[0].data.join("+")
+                ) == "0" && (
+                  <MinusIcon className="size-4 text-[#303030]" />
+                )}
+            </div>
+            <div className="graph-container bg-[#f5f5f5] rounded-lg w-full h-[20px] overflow-y-visible">
+              {fetchedData ? (
+                <MultiAxisChart
+                  data={{
+                    labels: timeLabels,
+                    datasets:
+                      fetchedData[item.name.replace(/\s+/g, "_").toLowerCase()]
+                        .dataset,
+                  }}
+                  smallGraph={true}
+                  className="!h-[30px] bg-white"
+                />
+              ) : (
+                <div></div>
               )}
             </div>
-            <div className="graph-container mt-3 bg-[#f5f5f5] rounded-lg"></div>
           </div>
         </div>
       ))}

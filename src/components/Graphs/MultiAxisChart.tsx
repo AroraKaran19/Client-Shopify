@@ -30,17 +30,29 @@ Chart.register(
   Legend
 );
 
-const MultiAxisChart = ({ data, minMax, steps }: { data: ChartData, minMax?: { min: number; max: number }, steps?: number }) => {
+const MultiAxisChart = ({
+  data,
+  minMax,
+  steps,
+  smallGraph,
+  className,
+}: {
+  data: ChartData;
+  minMax?: { min: number; max: number };
+  steps?: number;
+  smallGraph?: boolean;
+  className?: string;
+}) => {
   const chartData = {
     labels: data.labels, // Use the time labels from the raw data
     datasets: data.datasets.map((dataset, _) => ({
-        label: dataset.label, // Use the date as the label
-        data: dataset.data, // Use the y-axis values
-        fill: false,
-        backgroundColor: "#fff",
-        borderColor: "#4eb5e2",
+      label: dataset.label, // Use the date as the label
+      data: dataset.data, // Use the y-axis values
+      fill: false,
+      backgroundColor: "#fff",
+      borderColor: "#4eb5e2",
     })),
-};
+  };
 
   const options = {
     responsive: true,
@@ -50,8 +62,8 @@ const MultiAxisChart = ({ data, minMax, steps }: { data: ChartData, minMax?: { m
     stacked: false,
     plugins: {
       legend: {
-        display: true,
-        position: 'bottom' as const,
+        display: smallGraph ? false : true,
+        position: "bottom" as const,
         labels: {
           font: {
             size: 11,
@@ -62,10 +74,11 @@ const MultiAxisChart = ({ data, minMax, steps }: { data: ChartData, minMax?: { m
     },
     scales: {
       y: {
+        display: smallGraph ? false : true,
         min: minMax?.min ?? 0,
         max: minMax?.max ?? undefined,
         grid: {
-          display: true,
+          display: smallGraph ? false : true,
           color: "#ddd",
         },
         ticks: {
@@ -76,12 +89,13 @@ const MultiAxisChart = ({ data, minMax, steps }: { data: ChartData, minMax?: { m
             color: "#70707b",
           },
           color: "#aaa",
-          callback: function(value: any) {
-            return '₹' + value; // Add the rupee symbol before the value
+          callback: function (value: any) {
+            return "₹" + value; // Add the rupee symbol before the value
           },
         },
       },
       x: {
+        display: smallGraph ? false : true,
         grid: {
           display: false,
         },
@@ -104,7 +118,7 @@ const MultiAxisChart = ({ data, minMax, steps }: { data: ChartData, minMax?: { m
       height={100}
       width={100}
       options={{ ...options, maintainAspectRatio: false }}
-      className="max-w-full max-h-full"
+      className={"max-w-full max-h-full " + className}
     />
   );
 };
