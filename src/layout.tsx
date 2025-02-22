@@ -141,7 +141,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
         selectedOption.range1.toLocaleDateString() != selectedValues.range1.toLocaleDateString() &&
         selectedOption.range2.toLocaleDateString() != selectedValues.range2.toLocaleDateString()
       ) {
-        selectedText.textContent = selectedValues.range1.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) + " - " + selectedValues.range2.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        selectedText.textContent = selectedValues.range1.toLocaleDateString() == selectedValues.range2.toLocaleDateString() ? selectedValues.range1.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : selectedValues.range1.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) + " - " + selectedValues.range2.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
       } else {
         selectedText.textContent = durationOptions.filter(
           (option) => option.active
