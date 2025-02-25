@@ -5,6 +5,7 @@ import { formatDate, GraphInputData } from "./GraphContent";
 import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
 import { formatCurrency } from "../utils";
+import { differenceInDays } from "date-fns";
 
 type OverviewData = {
   name: string;
@@ -15,11 +16,34 @@ type OverviewData = {
 const OverviewGraphs = () => {
   const [fetchedData, setFetchedData] = useState<GraphInputData>();
   const { selectedValues } = useContext(LayoutContext);
-  const timeLabels = Array.from({ length: 24 }, (_, i) => {
-    const hour = i % 12 === 0 ? 12 : i % 12;
-    const period = i < 12 ? "AM" : "PM";
-    return `${hour}:00 ${period}`;
-  });
+  const [moreThanOneDay, setMoreThanOneDay] = useState<boolean>(false);
+
+  const generateLabels = (type: string) => {
+    switch (type) {
+      case "time":
+        return Array.from({ length: 24 }, (_, i) => {
+          const hour = i % 12 === 0 ? 12 : i % 12;
+          const period = i < 12 ? "AM" : "PM";
+          return `${hour}:00 ${period}`;
+        });
+      case "date":
+        const labels = [];
+        if (selectedValues.range1 && selectedValues.range2) {
+          for (
+            let d = new Date(selectedValues.range1);
+            d <= new Date(selectedValues.range2);
+            d.setDate(d.getDate() + 1)
+          ) {
+            labels.push(
+              d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+            );
+          }
+        }
+        return labels;
+      default:
+        return [];
+    }
+  };
 
   const fetchData = async () => {
     if (selectedValues.range1 && selectedValues.range2) {
@@ -32,17 +56,18 @@ const OverviewGraphs = () => {
 
   useEffect(() => {
     setFetchedData(undefined);
-    const result = fetchData();
-    result.then((data) => {
-      setFetchedData(data);
-    });
-  }, [selectedValues]);
 
-  useEffect(() => {
-    if (fetchedData) {
-      console.log(fetchedData?.gross_sales.dataset);
+    if (selectedValues.range1 && selectedValues.range2) {
+      const startDate = new Date(selectedValues.range1);
+      const endDate = new Date(selectedValues.range2);
+      setMoreThanOneDay(differenceInDays(endDate, startDate) > 1);
+
+      const result = fetchData();
+      result.then((data) => {
+        setFetchedData(data);
+      });
     }
-  }, [fetchedData]);
+  }, [selectedValues]);
 
   const data: OverviewData[] = [
     {
@@ -143,7 +168,10 @@ const OverviewGraphs = () => {
                           ].dataset
                             .reduce(
                               (acc, curr) =>
-                                acc + curr.data.reduce((a, b) => a + b, 0),
+                                acc +
+                                (Array.isArray(curr.data)
+                                  ? curr.data.reduce((a, b) => a + b, 0)
+                                  : 0),
                               0
                             )
                             .toString()
@@ -155,7 +183,10 @@ const OverviewGraphs = () => {
                         ].dataset
                           .reduce(
                             (acc, curr) =>
-                              acc + curr.data.reduce((a, b) => a + b, 0),
+                              acc +
+                              (Array.isArray(curr.data)
+                                ? curr.data.reduce((a, b) => a + b, 0)
+                                : curr.data),
                             0
                           )
                           .toString()
@@ -168,7 +199,11 @@ const OverviewGraphs = () => {
                     item.name.replace(/\s+/g, "_").toLowerCase()
                   ].dataset
                     .reduce(
-                      (acc, curr) => acc + curr.data.reduce((a, b) => a + b, 0),
+                      (acc, curr) =>
+                        acc +
+                        (Array.isArray(curr.data)
+                          ? curr.data.reduce((a, b) => a + b, 0)
+                          : curr.data),
                       0
                     )
                     .toString()
@@ -178,7 +213,9 @@ const OverviewGraphs = () => {
               {fetchedData ? (
                 <MultiAxisChart
                   data={{
-                    labels: timeLabels,
+                    labels: moreThanOneDay
+                      ? generateLabels("date")
+                      : generateLabels("time"),
                     datasets:
                       fetchedData[item.name.replace(/\s+/g, "_").toLowerCase()]
                         .dataset,

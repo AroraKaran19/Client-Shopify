@@ -3,6 +3,7 @@ import { formatCurrency, generateGraphData } from "../utils";
 import GraphContainerBox from "./GraphContainerBox";
 import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
+import { differenceInDays } from "date-fns";
 
 const conversionRateBreakdownValue = "5%";
 const conversionRateBreakdownImage = "/default-rate-breakdown.png";
@@ -12,7 +13,7 @@ export interface GraphInputData {
   [key: string]: {
     dataset: {
       label: string;
-      data: number[];
+      data: number[] | number;
     }[];
   };
 }
@@ -27,11 +28,34 @@ export const formatDate = (date: Date) => {
 const GraphContent = () => {
   const { selectedValues } = useContext(LayoutContext);
   const [data, setData] = useState<GraphInputData>();
-  const timeLabels = Array.from({ length: 24 }, (_, i) => {
-    const hour = i % 12 === 0 ? 12 : i % 12;
-    const period = i < 12 ? "AM" : "PM";
-    return `${hour}:00 ${period}`;
-  });
+  const [moreThanOneDay, setMoreThanOneDay] = useState<boolean>(false);
+
+  const generateLabels = (type: string) => {
+    switch (type) {
+      case "time":
+        return Array.from({ length: 24 }, (_, i) => {
+          const hour = i % 12 === 0 ? 12 : i % 12;
+          const period = i < 12 ? "AM" : "PM";
+          return `${hour}:00 ${period}`;
+        });
+      case "date":
+        const labels = [];
+        if (selectedValues.range1 && selectedValues.range2) {
+          for (
+            let d = new Date(selectedValues.range1);
+            d <= new Date(selectedValues.range2);
+            d.setDate(d.getDate() + 1)
+          ) {
+            labels.push(
+              d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+            );
+          }
+        }
+        return labels;
+      default:
+        return [];
+    }
+  };
 
   const fetchData = async () => {
     if (selectedValues.range1 && selectedValues.range2) {
@@ -44,11 +68,17 @@ const GraphContent = () => {
 
   useEffect(() => {
     setData(undefined);
-    const result = fetchData();
-    result.then((data) => {
-      setData(data);
-      console.log(data?.total_sales_over_time.dataset);
-    });
+
+    if (selectedValues.range1 && selectedValues.range2) {
+      const startDate = new Date(selectedValues.range1);
+      const endDate = new Date(selectedValues.range2);
+      setMoreThanOneDay(differenceInDays(endDate, startDate) > 1);
+
+      const result = fetchData();
+      result.then((data) => {
+        setData(data);
+      });
+    }
   }, [selectedValues]);
 
   return (
@@ -65,8 +95,11 @@ const GraphContent = () => {
                     (data &&
                       formatCurrency(
                         data?.total_sales_over_time.dataset.reduce(
-                          (acc, curr) =>
-                            acc + curr.data.reduce((a, b) => a + b, 0),
+                          (prev, dataset) =>
+                            prev +
+                            (Array.isArray(dataset.data)
+                              ? dataset.data.reduce((a, b) => a + b, 0)
+                              : dataset.data),
                           0
                         )
                       ).toString()) ||
@@ -82,23 +115,24 @@ const GraphContent = () => {
                   },
                   minMax: {
                     min: 0,
-                    max:
-                      Math.max(
-                        ...(data?.total_sales_over_time.dataset.flatMap(
-                          (d) => d.data
-                        ) || [])
-                      ) === 0
-                        ? 10
-                        : Math.max(
-                            ...(data?.total_sales_over_time.dataset.flatMap(
-                              (d) => d.data
-                            ) || [])
-                          ),
                   },
+                  steps:
+                    data?.total_sales_over_time.dataset.reduce(
+                      (prev, dataset) =>
+                        prev +
+                        (Array.isArray(dataset.data)
+                          ? dataset.data.reduce((a, b) => a + b, 0)
+                          : dataset.data),
+                      0
+                    ) > 0
+                      ? undefined
+                      : 5,
                 })}
                 className="h-[389px] !w-full"
                 graphData={{
-                  labels: timeLabels,
+                  labels: moreThanOneDay
+                    ? generateLabels("date")
+                    : generateLabels("time"),
                   datasets: data?.total_sales_over_time.dataset || [],
                 }}
               />
@@ -155,8 +189,11 @@ const GraphContent = () => {
                       (data &&
                         formatCurrency(
                           data?.average_order_value_over_time.dataset.reduce(
-                            (acc, curr) =>
-                              acc + curr.data.reduce((a, b) => a + b, 0),
+                            (prev, data) =>
+                              prev +
+                              (Array.isArray(data.data)
+                                ? data.data.reduce((a, b) => a + b, 0)
+                                : data.data),
                             0
                           )
                         ).toString()) ||
@@ -169,10 +206,26 @@ const GraphContent = () => {
                         suffix: "(gross sales - discounts) / orders",
                       },
                     },
+                    minMax: {
+                      min: 0,
+                    },
+                    steps:
+                      data?.average_order_value_over_time.dataset.reduce(
+                        (prev, data) =>
+                          prev +
+                          (Array.isArray(data.data)
+                            ? data.data.reduce((a, b) => a + b, 0)
+                            : data.data),
+                        0
+                      ) > 0
+                        ? undefined
+                        : 5,
                   })}
                   className="h-[254px] !w-full"
                   graphData={{
-                    labels: timeLabels,
+                    labels: moreThanOneDay
+                      ? generateLabels("date")
+                      : generateLabels("time"),
                     datasets: data?.average_order_value_over_time.dataset || [],
                   }}
                 />
@@ -290,8 +343,11 @@ const GraphContent = () => {
                   (data &&
                     data?.conversion_rate_over_time.dataset
                       .reduce(
-                        (acc, curr) =>
-                          acc + curr.data.reduce((a, b) => a + b, 0),
+                        (prev, data) =>
+                          prev +
+                          (Array.isArray(data.data)
+                            ? data.data.reduce((a, b) => a + b, 0)
+                            : data.data),
                         0
                       )
                       .toString() + "%") ||
@@ -307,7 +363,9 @@ const GraphContent = () => {
               })}
               className="h-[344px] !w-full"
               graphData={{
-                labels: timeLabels,
+                labels: moreThanOneDay
+                  ? generateLabels("date")
+                  : generateLabels("time"),
                 datasets: data?.conversion_rate_over_time.dataset || [],
               }}
             />

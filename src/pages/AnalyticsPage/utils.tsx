@@ -17,7 +17,7 @@ export type GraphContentData = {
   value?: string;
   type: "ruppee" | "percent" | "number" | "line" | "donut" | "image";
   dataContent: JSX.Element;
-  minMax?: { min: number; max: number };
+  minMax?: { min?: number; max?: number };
   steps?: number;
 };
 
@@ -63,7 +63,7 @@ export function generateGraphData({
     text: string;
     formula?: { prefix: string; suffix: string };
   };
-  minMax?: { min: number; max: number };
+  minMax?: { min?: number; max?: number };
   steps?: number;
 }) {
   return {

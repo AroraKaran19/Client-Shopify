@@ -2,6 +2,7 @@ import { FirebaseError, initializeApp } from "firebase/app";
 import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 import { getAuth, signInAnonymously } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
+import { differenceInDays } from "date-fns";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -97,7 +98,7 @@ type fetchAllDataReturnType = {
   [key: string]: {
     dataset: {
       label: string;
-      data: number[];
+      data: number[] | number;
     }[];
   };
 };
@@ -130,6 +131,28 @@ export async function fetchAllData(date1: string, date2: string) {
         data: data[graph] ?? [],
       });
     }
+  }
+  if (differenceInDays(new Date(date2), new Date(date1)) > 1) {
+    const newLabel = `${new Date(date1).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      })} - ${new Date(date2).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        })}`;
+    Object.entries(result).forEach(([_, value]) => {
+      value.dataset = [{
+        label: newLabel,
+        data: value.dataset.map((data, index) => {
+          for (let i = 0; i < differenceInDays(new Date(date2), new Date(date1)) + 1; i++) {
+            if (index == i) {
+              return Array.isArray(data.data) ? data.data.filter((d): d is number => d !== undefined).reduce((a, b) => a + b, 0) : data.data;
+            }
+          }
+          return 0;
+        }),
+      }];
+    });
   }
   return result;
 }

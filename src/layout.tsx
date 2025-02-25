@@ -54,7 +54,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
       name: "Last 7 days",
       value: "last_7_days",
       range: {
-        range1: new Date(new Date().setDate(new Date().getDate() - 7)),
+        range1: new Date(new Date().setDate(new Date().getDate() - 6)),
         range2: new Date(),
       },
     },
@@ -62,7 +62,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
       name: "Last 30 days",
       value: "last_30_days",
       range: {
-        range1: new Date(new Date().setDate(new Date().getDate() - 30)),
+        range1: new Date(new Date().setDate(new Date().getDate() - 29)),
         range2: new Date(),
       },
     },
@@ -70,7 +70,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
       name: "Last 90 days",
       value: "last_90_days",
       range: {
-        range1: new Date(new Date().setDate(new Date().getDate() - 90)),
+        range1: new Date(new Date().setDate(new Date().getDate() - 89)),
         range2: new Date(),
       },
     },
@@ -78,7 +78,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
       name: "Last 365 days",
       value: "last_365_days",
       range: {
-        range1: new Date(new Date().setDate(new Date().getDate() - 365)),
+        range1: new Date(new Date().setDate(new Date().getDate() - 364)),
         range2: new Date(),
       },
     },
@@ -137,15 +137,17 @@ const Layout = ({ children }: { children: ReactNode }) => {
     if (selectedText) {
       if (
         selectedValues.range1 &&
-        selectedValues.range2 &&
-        selectedOption.range1.toLocaleDateString() != selectedValues.range1.toLocaleDateString() &&
-        selectedOption.range2.toLocaleDateString() != selectedValues.range2.toLocaleDateString()
+        selectedValues.range2
       ) {
-        selectedText.textContent = selectedValues.range1.toLocaleDateString() == selectedValues.range2.toLocaleDateString() ? selectedValues.range1.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : selectedValues.range1.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) + " - " + selectedValues.range2.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-      } else {
-        selectedText.textContent = durationOptions.filter(
-          (option) => option.active
-        )[0].name;
+        if (selectedOption.range1.toLocaleDateString() !== selectedValues.range1?.toLocaleDateString() || selectedOption.range2.toLocaleDateString() !== selectedValues.range2?.toLocaleDateString()) {
+          selectedText.textContent = selectedValues.range1?.toLocaleDateString() === selectedValues.range2?.toLocaleDateString()
+            ? selectedValues.range1.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+            : selectedValues.range1?.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) + " - " + selectedValues.range2?.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        } else {
+          selectedText.textContent = durationOptions.filter(
+            (option) => option.active
+          )[0].name;
+        }
       }
     }
   }, [durationOptions, selectedValues]);

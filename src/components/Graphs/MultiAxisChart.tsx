@@ -16,7 +16,7 @@ export type ChartData = {
   labels: string[];
   datasets: {
     label: string;
-    data: number[];
+    data: number[] | number;
   }[];
 };
 
@@ -39,13 +39,13 @@ const MultiAxisChart = ({
   className,
 }: {
   data: ChartData;
-  minMax?: { min: number; max: number };
+  minMax?: { min?: number; max?: number };
   steps?: number;
   smallGraph?: boolean;
   className?: string;
 }) => {
   const chartData = {
-    labels: data.labels, // Use the time labels from the raw data
+    labels: data.labels,
     datasets: data.datasets.map((dataset, _) => ({
       label: dataset.label, // Use the date as the label
       data: dataset.data, // Use the y-axis values
@@ -72,6 +72,20 @@ const MultiAxisChart = ({
           },
         },
       },
+      tooltip: {
+        callbacks: {
+          label: function (context: any) {
+            let label = context.dataset.label || "";
+            if (label) {
+              label += ": ";
+            }
+            if (context.parsed.y !== null) {
+              label += formatCurrency(context.parsed.y);
+            }
+            return label;
+          },
+        },
+      },
     },
     scales: {
       y: {
@@ -83,7 +97,7 @@ const MultiAxisChart = ({
           color: "#ddd",
         },
         ticks: {
-          stepSize: steps ?? 5,
+          stepSize: steps || undefined,
           beginAtZero: true,
           font: {
             size: 11,
