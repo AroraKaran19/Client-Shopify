@@ -11,6 +11,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { ChartData } from "./MultiAxisChart";
+import { formatCurrency } from "@/pages/AnalyticsPage/utils";
 
 Chart.register(
   CategoryScale,
@@ -23,7 +24,13 @@ Chart.register(
   Legend
 );
 
-const MulitAxisChartPercent = ( { data } : { data : ChartData }) => {
+const MulitAxisChartPercent = ({
+  data,
+  showLabel,
+}: {
+  data: ChartData;
+  showLabel?: boolean;
+}) => {
   const chartData = {
     labels: data.labels,
     datasets: data.datasets.map((dataset, _) => ({
@@ -48,7 +55,25 @@ const MulitAxisChartPercent = ( { data } : { data : ChartData }) => {
             color: "#70707b",
           },
           usePointStyle: true,
-          pointStyle: 'line',
+          pointStyle: "line",
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: function (context: any) {
+            let label = context.dataset.label || "";
+            if (label) {
+              if (showLabel) {
+                label = " ";
+              } else {
+                label += ": ";
+              }
+            }
+            if (context.parsed.y !== null) {
+              label += context.parsed.y + "%";
+            }
+            return label;
+          },
         },
       },
     },

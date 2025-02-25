@@ -191,7 +191,6 @@ const OverviewGraphs = () => {
                           )
                           .toString()
                       ))}
-                {item.type === "percent" && "%"}
               </span>
               {fetchedData &&
                 eval(

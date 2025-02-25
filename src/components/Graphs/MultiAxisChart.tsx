@@ -37,12 +37,14 @@ const MultiAxisChart = ({
   steps,
   smallGraph,
   className,
+  showLabel=false,
 }: {
   data: ChartData;
   minMax?: { min?: number; max?: number };
   steps?: number;
   smallGraph?: boolean;
   className?: string;
+  showLabel?: boolean;
 }) => {
   const chartData = {
     labels: data.labels,
@@ -79,7 +81,11 @@ const MultiAxisChart = ({
           label: function (context: any) {
             let label = context.dataset.label || "";
             if (label) {
-              label += ": ";
+              if (showLabel) {
+                label = " ";
+              } else {
+                label += ": ";
+              }
             }
             if (context.parsed.y !== null) {
               label += formatCurrency(context.parsed.y);

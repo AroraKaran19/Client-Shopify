@@ -127,6 +127,7 @@ const GraphContent = () => {
                     ) > 0
                       ? undefined
                       : 5,
+                  showLabel: moreThanOneDay ? true : false,
                 })}
                 className="h-[389px] !w-full"
                 graphData={{
@@ -220,6 +221,7 @@ const GraphContent = () => {
                       ) > 0
                         ? undefined
                         : 5,
+                    showLabel: moreThanOneDay ? true : false,
                   })}
                   className="h-[254px] !w-full"
                   graphData={{
@@ -360,6 +362,7 @@ const GraphContent = () => {
                     suffix: "sessions that completed checkout / sessions",
                   },
                 },
+                showLabel: moreThanOneDay ? true : false,
               })}
               className="h-[344px] !w-full"
               graphData={{

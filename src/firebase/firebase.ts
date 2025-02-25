@@ -122,6 +122,7 @@ export async function fetchAllData(date1: string, date2: string) {
     const date = d.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
     });
     const data = await fetchData(d.toISOString().split("T")[0]);
     for (let de = 0; de < graphs.length; de++) {
@@ -136,9 +137,11 @@ export async function fetchAllData(date1: string, date2: string) {
     const newLabel = `${new Date(date1).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
+      year: "numeric",
       })} - ${new Date(date2).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
+        year: "numeric",
         })}`;
     Object.entries(result).forEach(([_, value]) => {
       value.dataset = [{

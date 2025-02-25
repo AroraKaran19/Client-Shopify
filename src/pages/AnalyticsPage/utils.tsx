@@ -19,6 +19,7 @@ export type GraphContentData = {
   dataContent: JSX.Element;
   minMax?: { min?: number; max?: number };
   steps?: number;
+  showLabel?: boolean;
 };
 
 export interface GraphData {
@@ -54,6 +55,7 @@ export function generateGraphData({
   dataContent,
   minMax,
   steps,
+  showLabel,
 }: {
   name: string;
   value?: string;
@@ -65,6 +67,7 @@ export function generateGraphData({
   };
   minMax?: { min?: number; max?: number };
   steps?: number;
+  showLabel?: boolean;
 }) {
   return {
     name: name,
@@ -77,5 +80,6 @@ export function generateGraphData({
     ),
     minMax: minMax,
     steps: steps,
+    showLabel: showLabel,
   };
 }

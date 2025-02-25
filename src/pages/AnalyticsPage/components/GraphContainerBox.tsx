@@ -74,10 +74,11 @@ const GraphContainerBox = ({
                 data={graphData}
                 minMax={graphInfo?.minMax}
                 steps={graphInfo?.steps}
+                showLabel={graphInfo?.showLabel}
               />
             )) ||
             (graphInfo.type === "percent" && typeof graphData !== "number" && (
-              <MulitAxisChartPercent data={graphData} />
+              <MulitAxisChartPercent data={graphData} showLabel={graphInfo?.showLabel} />
             ))
           )}
         </div>
