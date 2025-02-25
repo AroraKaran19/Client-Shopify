@@ -191,7 +191,7 @@ const AdminPage = () => {
       </div>
       <div className="admin-changes-container w-full p-6 flex justify-center items-center border mt-6">
         <form
-          className="admin-changes-form w-full max-w-lg"
+          className="admin-changes-form w-full max-w-lg flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             saveData();
@@ -248,7 +248,32 @@ const AdminPage = () => {
               Select a date to view data
             </h2>
           )}
-          <label>Conversion Rate Breakdown Image</label>
+          <label className="mt-6 font-bold">Change Conversion Rate Breakdown Image</label>
+          <input
+            type="file"
+            className="w-full border p-2"
+            accept="image/*"
+            onChange={(e) => {
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              alert("This feature is not available yet");
+            }}
+          />
+          <label className="mt-6 font-bold">Change Sessions by device type Image</label>
+          <input
+            type="file"
+            className="w-full border p-2"
+            accept="image/*"
+            onChange={(e) => {
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              alert("This feature is not available yet");
+            }}
+          />
         </form>
       </div>
       {changeValue && copyData && (
