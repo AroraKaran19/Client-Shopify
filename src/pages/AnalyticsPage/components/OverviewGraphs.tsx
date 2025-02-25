@@ -35,7 +35,7 @@ const OverviewGraphs = () => {
             d.setDate(d.getDate() + 1)
           ) {
             labels.push(
-              d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+              d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
             );
           }
         }
