@@ -47,6 +47,8 @@ const MulitAxisChartPercent = ( { data } : { data : ChartData }) => {
             size: 11,
             color: "#70707b",
           },
+          usePointStyle: true,
+          pointStyle: 'line',
         },
       },
     },

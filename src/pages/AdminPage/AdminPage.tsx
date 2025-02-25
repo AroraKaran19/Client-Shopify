@@ -7,9 +7,9 @@ interface DateData {
   returning_customer_rate: { time: string; value: number }[];
   orders_fulfilled: { time: string; value: number }[];
   orders: { time: string; value: number }[];
-	total_sales_over_time: { time: string; value: number }[];
-	conversion_rate_over_time: { time: string; value: number }[];
-	average_order_value_over_time: { time: string; value: number }[];
+  total_sales_over_time: { time: string; value: number }[];
+  conversion_rate_over_time: { time: string; value: number }[];
+  average_order_value_over_time: { time: string; value: number }[];
 }
 
 const Graphs = [
@@ -17,9 +17,9 @@ const Graphs = [
   "Returning customer rate",
   "Orders fulfilled",
   "Orders",
-	"Total sales over time",
-	"Conversion rate over time",
-	"Average order value over time",
+  "Total sales over time",
+  "Conversion rate over time",
+  "Average order value over time",
 ];
 
 const AdminPage = () => {
@@ -57,9 +57,11 @@ const AdminPage = () => {
           returning_customer_rate: transformData("returning_customer_rate"),
           orders_fulfilled: transformData("orders_fulfilled"),
           orders: transformData("orders"),
-					total_sales_over_time: transformData("total_sales_over_time"),
-					conversion_rate_over_time: transformData("conversion_rate_over_time"),
-					average_order_value_over_time: transformData("average_order_value_over_time"),
+          total_sales_over_time: transformData("total_sales_over_time"),
+          conversion_rate_over_time: transformData("conversion_rate_over_time"),
+          average_order_value_over_time: transformData(
+            "average_order_value_over_time"
+          ),
         });
       });
     }
@@ -161,7 +163,7 @@ const AdminPage = () => {
               )
             : []
         );
-				setMassChanges(false);
+        setMassChanges(false);
       }
     } else {
       setChangeValue(false);
@@ -201,51 +203,52 @@ const AdminPage = () => {
             className="w-full border p-2 mb-4"
             onChange={(e) => setDate(e.target.value)}
             ref={dateRef}
-						min={"2021-01-01"}
-						max={new Date().toISOString().split("T")[0]}
+            min={"2021-01-01"}
+            max={new Date().toISOString().split("T")[0]}
           />
           {date ? (
             copyData ? (
-							<>
-              <h2 className="text-2xl font-bold text-center">KPIs</h2>
-              <div className="kpi-container w-full flex gap-2 flex-col items-center justify-center">
-                {Graphs.map((item, index) => {
-                  return (
-                    <button
-                      key={index}
-                      className="change-value-btn w-full p-2 bg-black hover:bg-black/60 active:bg-black/80 text-white rounded-xl transition-all ease-in-out duration-200"
-                      type="button"
-                      onClick={() => {
-                        setCurrentSelection(
-                          item.toLowerCase().replace(/ /g, "_")
-                        );
-                        setChangeValue(true);
-                      }}
-                    >
-                      {item}
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all ease-in-out duration-200"
-                disabled={allowSave}
-                title={copyData === data ? "No changes to save" : ""}
-              >
-                Submit
-              </button>
-            </>
-						) : (
-							<h2 className="text-2xl font-bold text-center">
-								Loading data...
-							</h2>
-						)
+              <>
+                <h2 className="text-2xl font-bold text-center">KPIs</h2>
+                <div className="kpi-container w-full flex gap-2 flex-col items-center justify-center">
+                  {Graphs.map((item, index) => {
+                    return (
+                      <button
+                        key={index}
+                        className="change-value-btn w-full p-2 bg-black hover:bg-black/60 active:bg-black/80 text-white rounded-xl transition-all ease-in-out duration-200"
+                        type="button"
+                        onClick={() => {
+                          setCurrentSelection(
+                            item.toLowerCase().replace(/ /g, "_")
+                          );
+                          setChangeValue(true);
+                        }}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all ease-in-out duration-200"
+                  disabled={allowSave}
+                  title={copyData === data ? "No changes to save" : ""}
+                >
+                  Submit
+                </button>
+              </>
+            ) : (
+              <h2 className="text-2xl font-bold text-center">
+                Loading data...
+              </h2>
+            )
           ) : (
-						<h2 className="text-2xl font-bold text-center">
-							Select a date to view data
-						</h2>
-					)}
+            <h2 className="text-2xl font-bold text-center">
+              Select a date to view data
+            </h2>
+          )}
+          <label>Conversion Rate Breakdown Image</label>
         </form>
       </div>
       {changeValue && copyData && (
