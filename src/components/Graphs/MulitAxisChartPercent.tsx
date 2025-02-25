@@ -11,7 +11,6 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { ChartData } from "./MultiAxisChart";
-import { formatCurrency } from "@/pages/AnalyticsPage/utils";
 
 Chart.register(
   CategoryScale,
