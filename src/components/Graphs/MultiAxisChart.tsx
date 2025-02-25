@@ -1,3 +1,4 @@
+import { formatCurrency } from "@/pages/AnalyticsPage/utils";
 import {
   CategoryScale,
   Chart,
@@ -90,7 +91,7 @@ const MultiAxisChart = ({
           },
           color: "#aaa",
           callback: function (value: any) {
-            return "₹" + value; // Add the rupee symbol before the value
+            return formatCurrency(value); // Add the rupee symbol before the value
           },
         },
       },

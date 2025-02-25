@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from "react";
-import { generateGraphData } from "../utils";
+import { formatCurrency, generateGraphData } from "../utils";
 import GraphContainerBox from "./GraphContainerBox";
 import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
@@ -47,6 +47,7 @@ const GraphContent = () => {
     const result = fetchData();
     result.then((data) => {
       setData(data);
+      console.log(data?.total_sales_over_time.dataset);
     });
   }, [selectedValues]);
 
@@ -62,12 +63,13 @@ const GraphContent = () => {
                   type: "ruppee",
                   value:
                     (data &&
-                      "₹" +
-                        eval(
-                          data?.total_sales_over_time.dataset?.[0].data.join(
-                            "+"
-                          )
-                        ).toString()) ||
+                      formatCurrency(
+                        data?.total_sales_over_time.dataset.reduce(
+                          (acc, curr) =>
+                            acc + curr.data.reduce((a, b) => a + b, 0),
+                          0
+                        )
+                      ).toString()) ||
                     "",
                   dataContent: {
                     heading: "Total sales over time",
@@ -82,12 +84,15 @@ const GraphContent = () => {
                     min: 0,
                     max:
                       Math.max(
-                        ...(data?.total_sales_over_time.dataset[0].data || [])
+                        ...(data?.total_sales_over_time.dataset.flatMap(
+                          (d) => d.data
+                        ) || [])
                       ) === 0
                         ? 10
                         : Math.max(
-                            ...(data?.total_sales_over_time.dataset[0].data ||
-                              [])
+                            ...(data?.total_sales_over_time.dataset.flatMap(
+                              (d) => d.data
+                            ) || [])
                           ),
                   },
                 })}
@@ -148,12 +153,13 @@ const GraphContent = () => {
                     type: "ruppee",
                     value:
                       (data &&
-                        "₹" +
-                          eval(
-                            data?.average_order_value_over_time.dataset?.[0].data.join(
-                              "+"
-                            )
-                          ).toString()) ||
+                        formatCurrency(
+                          data?.average_order_value_over_time.dataset.reduce(
+                            (acc, curr) =>
+                              acc + curr.data.reduce((a, b) => a + b, 0),
+                            0
+                          )
+                        ).toString()) ||
                       "",
                     dataContent: {
                       heading: "Average order value over time",
@@ -282,11 +288,13 @@ const GraphContent = () => {
                 type: "percent",
                 value:
                   (data &&
-                    eval(
-                      data?.conversion_rate_over_time.dataset?.[0].data.join(
-                        "+"
+                    data?.conversion_rate_over_time.dataset
+                      .reduce(
+                        (acc, curr) =>
+                          acc + curr.data.reduce((a, b) => a + b, 0),
+                        0
                       )
-                    ).toString() + "%") ||
+                      .toString() + "%") ||
                   "",
                 dataContent: {
                   heading: "Conversion rate over time",

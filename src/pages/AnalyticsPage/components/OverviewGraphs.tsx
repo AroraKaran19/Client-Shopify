@@ -4,6 +4,7 @@ import MultiAxisChart from "@/components/Graphs/MultiAxisChart";
 import { formatDate, GraphInputData } from "./GraphContent";
 import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
+import { formatCurrency } from "../utils";
 
 type OverviewData = {
   name: string;
@@ -133,23 +134,45 @@ const OverviewGraphs = () => {
           <div className="overview-info flex justify-between items-center gap-8 h-fit">
             <div className="font-semibold text-sm flex gap-2 items-center">
               <span>
-                {item.type === "ruppee" && "₹"}
                 {fetchedData &&
-                  eval(
-                    fetchedData[
-                      item.name.replace(/\s+/g, "_").toLowerCase()
-                    ].dataset[0].data.join("+")
-                  )}
+                  (item.type === "ruppee"
+                    ? formatCurrency(
+                        eval(
+                          fetchedData[
+                            item.name.replace(/\s+/g, "_").toLowerCase()
+                          ].dataset
+                            .reduce(
+                              (acc, curr) =>
+                                acc + curr.data.reduce((a, b) => a + b, 0),
+                              0
+                            )
+                            .toString()
+                        )
+                      )
+                    : eval(
+                        fetchedData[
+                          item.name.replace(/\s+/g, "_").toLowerCase()
+                        ].dataset
+                          .reduce(
+                            (acc, curr) =>
+                              acc + curr.data.reduce((a, b) => a + b, 0),
+                            0
+                          )
+                          .toString()
+                      ))}
                 {item.type === "percent" && "%"}
               </span>
               {fetchedData &&
                 eval(
                   fetchedData[
                     item.name.replace(/\s+/g, "_").toLowerCase()
-                  ].dataset[0].data.join("+")
-                ) == "0" && (
-                  <MinusIcon className="size-4 text-[#303030]" />
-                )}
+                  ].dataset
+                    .reduce(
+                      (acc, curr) => acc + curr.data.reduce((a, b) => a + b, 0),
+                      0
+                    )
+                    .toString()
+                ) == "0" && <MinusIcon className="size-4 text-[#303030]" />}
             </div>
             <div className="graph-container bg-[#f5f5f5] rounded-lg w-full h-[20px] overflow-y-visible">
               {fetchedData ? (

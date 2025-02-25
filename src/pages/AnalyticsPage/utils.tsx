@@ -1,5 +1,17 @@
 import { JSX } from "react";
 
+export const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+export const formatDatasetCurrency = (dataset: number[]) => {
+  return dataset.map((value) => Number(formatCurrency(value).replace("₹", "")));
+}
+
 export type GraphContentData = {
   name: string;
   value?: string;
@@ -14,18 +26,20 @@ export interface GraphData {
   data: GraphContentData;
 }
 
-const handleDataContent = (heading: string, text: string, formula?: {prefix: string, suffix: string}) => {
+const handleDataContent = (
+  heading: string,
+  text: string,
+  formula?: { prefix: string; suffix: string }
+) => {
   return (
     <div className="content-data flex flex-col gap-2 text-[13px] leading-4">
       <h3 className="content-heading text-[#303030] font-semibold">
         {heading}
       </h3>
-      <p className="content-text text-[#303030] font-[500] flex-wrap">
-        {text}
-      </p>
+      <p className="content-text text-[#303030] font-[500] flex-wrap">{text}</p>
       {formula && (
         <p className="content-extra font-['Courier_Prime'] font-normal">
-          <span className="text-blue-900">{formula.prefix} {" "}</span>
+          <span className="text-blue-900">{formula.prefix} </span>
           <span className="text-green-800">{formula.suffix}</span>
         </p>
       )}
@@ -44,7 +58,11 @@ export function generateGraphData({
   name: string;
   value?: string;
   type: "ruppee" | "percent" | "number" | "line" | "donut" | "image";
-  dataContent: { heading: string; text: string; formula?: { prefix: string, suffix: string } };
+  dataContent: {
+    heading: string;
+    text: string;
+    formula?: { prefix: string; suffix: string };
+  };
   minMax?: { min: number; max: number };
   steps?: number;
 }) {
