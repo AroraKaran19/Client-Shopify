@@ -27,6 +27,16 @@ const graphs = [
   "average_order_value_over_time",
 ];
 
+export async function addDayData(date: string, value: number, graph: "gross_sales" | "returning_customer_rate" | "orders_fulfilled" | "orders" | "total_sales_over_time" | "conversion_rate_over_time" | "average_order_value_over_time") {
+  const dividedValue = value / 24;
+  const data = new Array(24).fill(dividedValue);
+
+  await setDoc(doc(db, "graphData", date), {
+    [graph]: data,
+  }, { merge: true });
+}
+
+
 async function addData(date: string) {
   await setDoc(doc(db, "graphData", date), {
     gross_sales: new Array(24).fill(0),

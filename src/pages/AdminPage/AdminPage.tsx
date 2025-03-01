@@ -1,5 +1,5 @@
 import XMarkIcon from "@/assets/svg/XMarkIcon";
-import { fetchData, updateDateData } from "@/firebase/firebase";
+import { addDayData, fetchData, updateDateData } from "@/firebase/firebase";
 import { useEffect, useRef, useState } from "react";
 
 interface DateData {
@@ -10,6 +10,16 @@ interface DateData {
   total_sales_over_time: { time: string; value: number }[];
   conversion_rate_over_time: { time: string; value: number }[];
   average_order_value_over_time: { time: string; value: number }[];
+}
+
+interface DayData {
+  gross_sales?: number;
+  returning_customer_rate?: number;
+  orders_fulfilled?: number;
+  orders?: number;
+  total_sales_over_time?: number;
+  conversion_rate_over_time?: number;
+  average_order_value_over_time?: number;
 }
 
 const Graphs = [
@@ -32,6 +42,9 @@ const AdminPage = () => {
   const [allowSave, setAllowSave] = useState<boolean>(false);
   const [currentSelection, setCurrentSelection] = useState<string>("");
   const [changeValue, setChangeValue] = useState<boolean>(false);
+  const [dataType, setDataType] = useState<"day" | "time">();
+  const [dayValue, setDayValue] = useState<string>("");
+  const [dayChanges, setDayChanges] = useState<DayData>();
   const timeLabels = Array.from({ length: 24 }, (_, i) => {
     const hour = i % 12 === 0 ? 12 : i % 12;
     const period = i < 12 ? "AM" : "PM";
@@ -110,6 +123,59 @@ const AdminPage = () => {
         setCopyData(undefined);
       } else {
         setChangeValue(false);
+      }
+    }
+  };
+
+  const saveDayChanges = () => {
+    if (dayValue) {
+      const ask_user = confirm(
+        `Are you sure you want to save the changes in ${currentSelection
+          .toUpperCase()
+          .replace(/_/g, " ")}?`
+      );
+      if (ask_user) {
+        setDayChanges((prev) => {
+          const copy = { ...prev };
+          copy[currentSelection as keyof DayData] = parseInt(dayValue);
+          return copy;
+        });
+        setChangeValue(false);
+      } else {
+        setDayValue("");
+      }
+    }
+  };
+
+  const submitDayChanges = () => {
+    if (dayValue) {
+      const ask_user = confirm(
+        `Are you sure you want to save the changes in ${currentSelection
+          .toUpperCase()
+          .replace(/_/g, " ")}?`
+      );
+      if (ask_user) {
+        addDayData(
+          date as string,
+          Object.values(dayChanges as DayData)[0],
+          Object.keys(dayChanges as DayData)[0] as keyof DayData
+        );
+        setChangeValue(false);
+        setDayValue("");
+        setDayChanges(undefined);
+        setDate("");
+        setDataType(undefined);
+        if (dateRef.current) {
+          dateRef.current.value = "";
+        }
+        const defaultDataType = document.querySelector(
+          "select"
+        ) as HTMLSelectElement;
+        defaultDataType.selectedIndex
+          ? (defaultDataType.selectedIndex = 0)
+          : (defaultDataType.value = "");
+      } else {
+        setDayValue("");
       }
     }
   };
@@ -194,7 +260,9 @@ const AdminPage = () => {
           className="admin-changes-form w-full max-w-lg flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            saveData();
+            dataType === "day"
+              ? submitDayChanges()
+              : saveData();
           }}
         >
           <label>Date</label>
@@ -206,7 +274,19 @@ const AdminPage = () => {
             min={"2021-01-01"}
             max={new Date().toISOString().split("T")[0]}
           />
-          {date ? (
+          <label>How you want to insert data?</label>
+          <select
+            className="w-full border p-2 mb-4"
+            defaultValue={""}
+            onChange={(e) => setDataType(e.target.value as "day" | "time")}
+          >
+            <option value="" disabled>
+              Select an option
+            </option>
+            <option value="day">Day</option>
+            <option value="time">Time</option>
+          </select>
+          {date && dataType ? (
             copyData ? (
               <>
                 <h2 className="text-2xl font-bold text-center">KPIs</h2>
@@ -232,7 +312,7 @@ const AdminPage = () => {
                 <button
                   type="submit"
                   className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all ease-in-out duration-200"
-                  disabled={allowSave}
+                  disabled={dataType === "time" ? allowSave : !dayChanges}
                   title={copyData === data ? "No changes to save" : ""}
                 >
                   Submit
@@ -248,7 +328,9 @@ const AdminPage = () => {
               Select a date to view data
             </h2>
           )}
-          <label className="mt-6 font-bold">Change Conversion Rate Breakdown Image</label>
+          <label className="mt-6 font-bold">
+            Change Conversion Rate Breakdown Image
+          </label>
           <input
             type="file"
             className="w-full border p-2"
@@ -261,7 +343,9 @@ const AdminPage = () => {
               alert("This feature is not available yet");
             }}
           />
-          <label className="mt-6 font-bold">Change Sessions by device type Image</label>
+          <label className="mt-6 font-bold">
+            Change Sessions by device type Image
+          </label>
           <input
             type="file"
             className="w-full border p-2"
@@ -276,7 +360,38 @@ const AdminPage = () => {
           />
         </form>
       </div>
-      {changeValue && copyData && (
+      {changeValue && copyData && dataType === "day" && (
+        <div className="change-value-window absolute top-0 left-0 w-full h-full bg-black/20 backdrop-blur-sm flex justify-center items-center transition-all ease-in-out duration-500">
+          <div className="change-values-container h-[500px] w-[700px] bg-white p-6 rounded-lg flex flex-col items-center relative gap-6">
+            <div
+              className="close-btn absolute top-2 right-4 cursor-pointer p-1 hover:bg-black/20 active:bg-black/30 text-black/80 hover:text-black rounded-full transition-all ease-in-out duration-200"
+              onClick={closeChangeWindow}
+            >
+              <XMarkIcon className="size-6" />
+            </div>
+            <h2 className="heading text-xl text-black">
+              Change value for{" "}
+              {currentSelection.toUpperCase().replace(/_/g, " ")}
+            </h2>
+            <div className="data-value-containers w-full flex flex-col gap-2 overflow-y-auto">
+              <label>Insert value for {date}</label>
+              <input
+                type="number"
+                className="border outline-none"
+                onChange={(e) => setDayValue(e.target.value)}
+              />
+            </div>
+            <button
+              className="save-btn mt-auto bg-green-300 px-3 py-2 text-black rounded-lg w-fit place-self-center text-sm cursor-pointer disabled:bg-gray-300 disabled:cursor-not-allowed transition-all ease-in-out duration-200"
+              disabled={!dayValue}
+              onClick={saveDayChanges}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+      {changeValue && copyData && dataType === "time" && (
         <div className="change-value-window absolute top-0 left-0 w-full h-full bg-black/20 backdrop-blur-sm flex justify-center items-center transition-all ease-in-out duration-500">
           <div className="change-values-container h-[500px] w-[700px] bg-white p-6 rounded-lg flex flex-col items-center relative gap-6">
             <div
