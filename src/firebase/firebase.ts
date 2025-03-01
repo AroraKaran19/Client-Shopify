@@ -27,15 +27,56 @@ const graphs = [
   "average_order_value_over_time",
 ];
 
-export async function addDayData(date: string, value: number, graph: "gross_sales" | "returning_customer_rate" | "orders_fulfilled" | "orders" | "total_sales_over_time" | "conversion_rate_over_time" | "average_order_value_over_time") {
+export async function addDayData(
+  date: string,
+  value: number,
+  graph:
+    | "gross_sales"
+    | "returning_customer_rate"
+    | "orders_fulfilled"
+    | "orders"
+    | "total_sales_over_time"
+    | "conversion_rate_over_time"
+    | "average_order_value_over_time"
+) {
   const dividedValue = value / 24;
   const data = new Array(24).fill(dividedValue);
 
-  await setDoc(doc(db, "graphData", date), {
-    [graph]: data,
-  }, { merge: true });
+  await setDoc(
+    doc(db, "graphData", date),
+    {
+      [graph]: data,
+    },
+    { merge: true }
+  );
 }
 
+export async function readDayData(
+  date: string,
+  graph:
+    | "gross_sales"
+    | "returning_customer_rate"
+    | "orders_fulfilled"
+    | "orders"
+    | "total_sales_over_time"
+    | "conversion_rate_over_time"
+    | "average_order_value_over_time"
+) {
+  const querySnapshot = await getDocs(collection(db, "graphData"));
+
+  for (const doc of querySnapshot.docs) {
+    if (doc.id === date) {
+      const graphData = doc.data()[graph];
+
+      if (Array.isArray(graphData)) {
+        return Math.round(graphData.reduce((acc: number, curr: number) => acc + curr, 0));
+      }
+      return 0;
+    }
+  }
+
+  return 0;
+}
 
 async function addData(date: string) {
   await setDoc(doc(db, "graphData", date), {
@@ -148,23 +189,33 @@ export async function fetchAllData(date1: string, date2: string) {
       month: "short",
       day: "numeric",
       year: "numeric",
-      })} - ${new Date(date2).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        })}`;
+    })} - ${new Date(date2).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })}`;
     Object.entries(result).forEach(([_, value]) => {
-      value.dataset = [{
-        label: newLabel,
-        data: value.dataset.map((data, index) => {
-          for (let i = 0; i < differenceInDays(new Date(date2), new Date(date1)) + 1; i++) {
-            if (index == i) {
-              return Array.isArray(data.data) ? data.data.filter((d): d is number => d !== undefined).reduce((a, b) => a + b, 0) : data.data;
+      value.dataset = [
+        {
+          label: newLabel,
+          data: value.dataset.map((data, index) => {
+            for (
+              let i = 0;
+              i < differenceInDays(new Date(date2), new Date(date1)) + 1;
+              i++
+            ) {
+              if (index == i) {
+                return Array.isArray(data.data)
+                  ? data.data
+                      .filter((d): d is number => d !== undefined)
+                      .reduce((a, b) => a + b, 0)
+                  : data.data;
+              }
             }
-          }
-          return 0;
-        }),
-      }];
+            return 0;
+          }),
+        },
+      ];
     });
   }
   return result;

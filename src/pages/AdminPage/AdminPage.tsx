@@ -1,5 +1,10 @@
 import XMarkIcon from "@/assets/svg/XMarkIcon";
-import { addDayData, fetchData, updateDateData } from "@/firebase/firebase";
+import {
+  addDayData,
+  fetchData,
+  readDayData,
+  updateDateData,
+} from "@/firebase/firebase";
 import { useEffect, useRef, useState } from "react";
 
 interface DateData {
@@ -44,12 +49,38 @@ const AdminPage = () => {
   const [changeValue, setChangeValue] = useState<boolean>(false);
   const [dataType, setDataType] = useState<"day" | "time">();
   const [dayValue, setDayValue] = useState<string>("");
-  const [dayChanges, setDayChanges] = useState<DayData>();
+  const [dayChanges, setDayChanges] = useState<DayData[]>();
   const timeLabels = Array.from({ length: 24 }, (_, i) => {
     const hour = i % 12 === 0 ? 12 : i % 12;
     const period = i < 12 ? "AM" : "PM";
     return `${hour}:00 ${period}`;
   });
+
+  useEffect(() => {
+    if (date && dataType) {
+      const main = document.querySelector("main");
+      if (main) {
+        if (changeValue) {
+          main.style.overflowY = "hidden";
+          main.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          main.style.overflowY = "auto";
+        }
+      }
+    }
+  }, [changeValue]);
+
+  useEffect(() => {
+    const fetchDayDataAsync = async () => {
+      return readDayData(date as string, currentSelection as keyof DayData);
+    };
+
+    if (date && currentSelection) {
+      fetchDayDataAsync().then((result) => {
+        setDayValue(result.toString());
+      });
+    }
+  }, [date, currentSelection]);
 
   useEffect(() => {
     if (date) {
@@ -136,10 +167,11 @@ const AdminPage = () => {
       );
       if (ask_user) {
         setDayChanges((prev) => {
-          const copy = { ...prev };
-          copy[currentSelection as keyof DayData] = parseInt(dayValue);
+          const copy = prev ? [...prev] : [];
+          copy.push({ [currentSelection]: parseInt(dayValue) });
           return copy;
         });
+        setDayValue("");
         setChangeValue(false);
       } else {
         setDayValue("");
@@ -148,18 +180,18 @@ const AdminPage = () => {
   };
 
   const submitDayChanges = () => {
-    if (dayValue) {
+    if (dayChanges) {
       const ask_user = confirm(
         `Are you sure you want to save the changes in ${currentSelection
           .toUpperCase()
           .replace(/_/g, " ")}?`
       );
       if (ask_user) {
-        addDayData(
-          date as string,
-          Object.values(dayChanges as DayData)[0],
-          Object.keys(dayChanges as DayData)[0] as keyof DayData
-        );
+        for (let i = 0; i < dayChanges.length; i++) {
+          Object.entries(dayChanges[i]).forEach(([key, value]) => {
+            addDayData(date as string, value, key as keyof DayData);
+          });
+        }
         setChangeValue(false);
         setDayValue("");
         setDayChanges(undefined);
@@ -260,9 +292,7 @@ const AdminPage = () => {
           className="admin-changes-form w-full max-w-lg flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            dataType === "day"
-              ? submitDayChanges()
-              : saveData();
+            dataType === "day" ? submitDayChanges() : saveData();
           }}
         >
           <label>Date</label>
@@ -378,6 +408,7 @@ const AdminPage = () => {
               <input
                 type="number"
                 className="border outline-none"
+                placeholder={dayValue}
                 onChange={(e) => setDayValue(e.target.value)}
               />
             </div>
