@@ -13,7 +13,11 @@ type OverviewData = {
   dataContent: JSX.Element;
 };
 
-const OverviewGraphs = () => {
+interface OverviewGraphsProps {
+  storeId?: string;
+}
+
+const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
   const [fetchedData, setFetchedData] = useState<GraphInputData>();
   const { selectedValues } = useContext(LayoutContext);
   const [moreThanOneDay, setMoreThanOneDay] = useState<boolean>(false);
@@ -49,7 +53,8 @@ const OverviewGraphs = () => {
     if (selectedValues.range1 && selectedValues.range2) {
       return fetchAllData(
         formatDate(selectedValues.range1),
-        formatDate(selectedValues.range2)
+        formatDate(selectedValues.range2),
+        storeId
       );
     }
   };
@@ -67,7 +72,7 @@ const OverviewGraphs = () => {
         setFetchedData(data);
       });
     }
-  }, [selectedValues]);
+  }, [selectedValues, storeId]);
 
   const data: OverviewData[] = [
     {

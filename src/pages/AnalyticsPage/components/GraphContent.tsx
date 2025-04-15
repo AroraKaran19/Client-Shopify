@@ -25,7 +25,11 @@ export const formatDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const GraphContent = () => {
+interface GraphContentProps {
+  storeId?: string;
+}
+
+const GraphContent = ({ storeId }: GraphContentProps) => {
   const { selectedValues } = useContext(LayoutContext);
   const [data, setData] = useState<GraphInputData>();
   const [moreThanOneDay, setMoreThanOneDay] = useState<boolean>(false);
@@ -61,7 +65,8 @@ const GraphContent = () => {
     if (selectedValues.range1 && selectedValues.range2) {
       return fetchAllData(
         formatDate(selectedValues.range1),
-        formatDate(selectedValues.range2)
+        formatDate(selectedValues.range2),
+        storeId
       );
     }
   };
@@ -79,7 +84,7 @@ const GraphContent = () => {
         setData(data);
       });
     }
-  }, [selectedValues]);
+  }, [selectedValues, storeId]);
 
   return (
     <>

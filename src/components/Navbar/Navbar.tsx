@@ -5,16 +5,32 @@ import "./components/navbar.css";
 import Searchbar from "./components/Searchbar";
 import { LayoutContext } from "../../layout";
 import HamburgerIcon from "../../assets/svg/HamburgerIcon";
+import { getStoreSettings } from "../../firebase/firebase";
 
 const Navbar = () => {
   const { notifications, sidebarState, setSidebarState } = useContext(LayoutContext);
   const [notificationCount, setNotificationCount] = useState(
     notifications.length
   );
+  const [storeName, setStoreName] = useState("Loading...");
 
   useEffect(() => {
     setNotificationCount(notifications.length);
   }, [notifications]);
+
+  useEffect(() => {
+    const fetchStoreName = async () => {
+      try {
+        const settings = await getStoreSettings();
+        setStoreName(settings.storeName);
+      } catch (error) {
+        console.error("Error fetching store name:", error);
+        setStoreName("My Store");
+      }
+    };
+    
+    fetchStoreName();
+  }, []);
 
   return (
     <div className="navbar w-full flex gap-2 items-center h-[56px] bg-[#1a1a1a] py-2 sticky top-0 z-[500]">
@@ -52,7 +68,7 @@ const Navbar = () => {
           <div className="user-image-container size-7 rounded-lg bg-[#25e82b] text-black flex items-center justify-center">
             <p className="text-xs">MS</p>
           </div>
-          <p className="text-xs font-semibold sm:hidden">My Store</p>
+          <p className="text-xs font-semibold sm:hidden">{storeName}</p>
         </button>
       </div>
     </div>
