@@ -4,12 +4,13 @@ import {
   fetchData,
   readDayData,
   updateDateData,
-  fetchAllData,
   getStoreSettings,
   updateStoreName,
   getAllStores,
   createStore,
   getStoreById,
+  setDefaultAnalyticsStore,
+  getDefaultAnalyticsStore,
 } from "@/firebase/firebase";
 import {
   format,
@@ -20,9 +21,7 @@ import {
   getYear,
 } from "date-fns";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import StoreDataControls from "./components/StoreDataControls";
-import StoreComparison from "./components/StoreComparison";
+import { useParams, useNavigate } from "react-router-dom";
 
 // Constants
 const GRAPHS = [
@@ -71,19 +70,6 @@ interface StoreSettings {
   updatedAt: string;
 }
 
-interface DatasetItem {
-  label: string;
-  data: number[] | number;
-}
-
-interface RangeDataItem {
-  dataset: DatasetItem[];
-}
-
-interface RangeData {
-  [key: string]: RangeDataItem;
-}
-
 interface MonthData {
   days: {
     [date: string]: {
@@ -107,6 +93,7 @@ const AdminPage = () => {
   // Store management states
   const [availableStores, setAvailableStores] = useState<{id: string, name: string}[]>([]);
   const [currentStoreId, setCurrentStoreId] = useState<string>("");
+  const [isEditingDefault, setIsEditingDefault] = useState<boolean>(false);
   
   // State for tab navigation
   const [activeTab, setActiveTab] = useState<TabType>("daily");
@@ -135,21 +122,12 @@ const AdminPage = () => {
     "breakdown"
   );
 
-  // Range data states
-  const [dateRange, setDateRange] = useState<{
-    startDate: string;
-    endDate: string;
-  }>({
-    startDate: "",
-    endDate: "",
-  });
-  const [rangeData, setRangeData] = useState<RangeData | null>(null);
-
   // Settings states
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(
     null
   );
   const [newStoreName, setNewStoreName] = useState<string>("");
+  const [defaultAnalyticsStoreId, setDefaultAnalyticsStoreId] = useState<string>("");
 
   // Time labels for hourly data
   const timeLabels = Array.from({ length: 24 }, (_, i) => {
@@ -220,9 +198,19 @@ const AdminPage = () => {
     const fetchStoreSettings = async () => {
       try {
         setLoading(true);
-        const settings = await getStoreSettings(currentStoreId || undefined);
-        setStoreSettings(settings as StoreSettings);
-        setNewStoreName(settings.storeName);
+        // Only fetch store settings if we're not in default mode
+        if (!isEditingDefault) {
+          const settings = await getStoreSettings(currentStoreId || undefined);
+          setStoreSettings(settings as StoreSettings);
+          setNewStoreName(settings.storeName);
+        } else {
+          // Set default values for the default analytics page
+          setStoreSettings({
+            storeName: "Default Analytics Page",
+            updatedAt: new Date().toISOString()
+          });
+          setNewStoreName("Default Analytics Page");
+        }
         setLoading(false);
       } catch (error) {
         console.error("Error fetching store settings:", error);
@@ -230,10 +218,10 @@ const AdminPage = () => {
       }
     };
 
-    if (currentStoreId || !storeId) {
+    if (currentStoreId || !storeId || isEditingDefault) {
       fetchStoreSettings();
     }
-  }, [currentStoreId]);
+  }, [currentStoreId, isEditingDefault]);
 
   // Fetch available stores
   useEffect(() => {
@@ -242,37 +230,51 @@ const AdminPage = () => {
         setLoading(true);
         const stores = await getAllStores();
         setAvailableStores(stores);
+
+        // Get default analytics store
+        const defaultStoreId = await getDefaultAnalyticsStore();
+        if (defaultStoreId) {
+          setDefaultAnalyticsStoreId(defaultStoreId);
+        }
         
         // If a store name is provided in the URL, find the matching store
         if (storeId) {
-          // Make URL comparison more flexible
-          const formattedUrlName = storeId.toLowerCase();
-          const matchingStore = stores.find(store => {
-            // Check direct name match
-            if (store.name.toLowerCase() === formattedUrlName) return true;
-            
-            // Check URL-friendly version of the name
-            const urlFriendlyName = store.name.toLowerCase().replace(/\s+/g, '-');
-            return urlFriendlyName === formattedUrlName;
-          });
-          
-          if (matchingStore) {
-            setCurrentStoreId(matchingStore.id);
+          if (storeId.toLowerCase() === "default") {
+            setIsEditingDefault(true);
+            setCurrentStoreId("default");
           } else {
-            // If no matching store, try to create the store with this ID
-            try {
-              const newStore = await getStoreById(storeId);
-              setAvailableStores(prevStores => [...prevStores, newStore]);
-              setCurrentStoreId(newStore.id);
-            } catch (error) {
-              console.error("Error creating store from URL:", error);
-              // If creation fails, redirect to main admin page
-              navigate('/admin');
+            // Make URL comparison more flexible
+            const formattedUrlName = storeId.toLowerCase();
+            const matchingStore = stores.find(store => {
+              // Check direct name match
+              if (store.name.toLowerCase() === formattedUrlName) return true;
+              
+              // Check URL-friendly version of the name
+              const urlFriendlyName = store.name.toLowerCase().replace(/\s+/g, '-');
+              return urlFriendlyName === formattedUrlName;
+            });
+            
+            if (matchingStore) {
+              setCurrentStoreId(matchingStore.id);
+              setIsEditingDefault(false);
+            } else {
+              // If no matching store, try to create the store with this ID
+              try {
+                const newStore = await getStoreById(storeId);
+                setAvailableStores(prevStores => [...prevStores, newStore]);
+                setCurrentStoreId(newStore.id);
+                setIsEditingDefault(false);
+              } catch (error) {
+                console.error("Error creating store from URL:", error);
+                // If creation fails, redirect to main admin page
+                navigate('/admin');
+              }
             }
           }
         } else if (stores.length > 0) {
           // If no store specified but stores exist, select the first one
           setCurrentStoreId(stores[0].id);
+          setIsEditingDefault(false);
         }
         
         setLoading(false);
@@ -298,20 +300,20 @@ const AdminPage = () => {
   useEffect(() => {
     if (date && entryMethod === "day") {
     const fetchDayDataAsync = async () => {
-        return readDayData(date, selectedMetric as keyof DayData, currentStoreId || undefined);
+        return readDayData(date, selectedMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
     };
 
       fetchDayDataAsync().then((result) => {
         setDayData({ [selectedMetric as keyof DayData]: result });
       });
     }
-  }, [date, selectedMetric, currentStoreId]);
+  }, [date, selectedMetric, currentStoreId, isEditingDefault]);
 
   useEffect(() => {
     if (date && entryMethod === "hour") {
       setLoading(true);
       const fetchDataAsync = async () => {
-        return fetchData(date, currentStoreId || undefined);
+        return fetchData(date, isEditingDefault ? "default" : currentStoreId || undefined);
       };
 
       fetchDataAsync()
@@ -347,34 +349,12 @@ const AdminPage = () => {
           setLoading(false);
         });
     }
-  }, [date, selectedMetric, currentStoreId]);
-
-  useEffect(() => {
-    const fetchRangeDataAsync = async () => {
-      if (!dateRange.startDate || !dateRange.endDate) return;
-
-      try {
-        setLoading(true);
-        const result = await fetchAllData(
-          dateRange.startDate,
-          dateRange.endDate,
-          currentStoreId || undefined
-        );
-        setRangeData(result);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching range data:", error);
-        setLoading(false);
-      }
-    };
-
-    fetchRangeDataAsync();
-  }, [dateRange.startDate, dateRange.endDate, currentStoreId]);
+  }, [date, selectedMetric, currentStoreId, isEditingDefault]);
 
   // Fetch month data
   useEffect(() => {
     const fetchMonthData = async () => {
-      if (!currentStoreId) return;
+      if (!currentStoreId && !isEditingDefault) return;
       
       try {
         setLoading(true);
@@ -403,7 +383,7 @@ const AdminPage = () => {
         // Fetch data for each day and aggregate
         for (const day of daysInMonth) {
           const dateStr = format(day, "yyyy-MM-dd");
-          const dayData = await fetchData(dateStr, currentStoreId);
+          const dayData = await fetchData(dateStr, isEditingDefault ? "default" : currentStoreId);
 
           // Store day data
           newMonthData.days[dateStr] = {};
@@ -436,7 +416,7 @@ const AdminPage = () => {
     };
 
     fetchMonthData();
-  }, [selectedMonth, selectedYear, currentStoreId]);
+  }, [selectedMonth, selectedYear, currentStoreId, isEditingDefault]);
 
   // Modal handling
   const openModal = (type: "day" | "hour" | "month", metric: string) => {
@@ -483,7 +463,7 @@ const AdminPage = () => {
 
     try {
       setLoading(true);
-      await addDayData(date, value, selectedMetric as keyof DayData, currentStoreId || undefined);
+      await addDayData(date, value, selectedMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
 
       // Update local state
       setDayData((prev) => ({
@@ -524,7 +504,7 @@ const AdminPage = () => {
       });
 
       // Save to Firebase
-      await updateDateData(date, dataToSave as any, currentStoreId || undefined);
+      await updateDateData(date, dataToSave as any, isEditingDefault ? "default" : currentStoreId || undefined);
 
       // Update local state
       setHourlyData(updatedHourlyData);
@@ -568,7 +548,7 @@ const AdminPage = () => {
       // Update each day
       for (const day of daysInMonth) {
         const dateStr = format(day, "yyyy-MM-dd");
-        await addDayData(dateStr, valuePerDay, selectedMetric as keyof DayData, currentStoreId || undefined);
+        await addDayData(dateStr, valuePerDay, selectedMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
       }
 
       // Update local state
@@ -598,6 +578,7 @@ const AdminPage = () => {
   // Save store settings
   const saveStoreSettings = async () => {
     if (
+      isEditingDefault || 
       !storeSettings ||
       newStoreName === storeSettings.storeName ||
       !newStoreName.trim()
@@ -694,6 +675,23 @@ const AdminPage = () => {
     setDayValue(currentValue.toString());
   };
 
+  // Function to handle setting default analytics store
+  const handleSetDefaultAnalyticsStore = async (storeId: string) => {
+    try {
+      setLoading(true);
+      await setDefaultAnalyticsStore(storeId);
+      setDefaultAnalyticsStoreId(storeId);
+      
+      // Show success message
+      alert(`Default analytics store set successfully!`);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error setting default analytics store:", error);
+      setLoading(false);
+      alert(`Failed to set default analytics store: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
   // Function to save individual day edit
   const saveDayEdit = async () => {
     if (!editingDay || !editingMetric || !monthData) return;
@@ -705,7 +703,7 @@ const AdminPage = () => {
       setLoading(true);
 
       // Save to Firebase
-      await addDayData(editingDay, value, editingMetric as keyof DayData, currentStoreId || undefined);
+      await addDayData(editingDay, value, editingMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
 
       // Update local state
       const updatedMonthData = { ...monthData };
@@ -742,10 +740,12 @@ const AdminPage = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-              Admin Dashboard
+              Admin Dashboard {isEditingDefault ? "- Default Analytics Page" : ""}
             </h1>
             <p className="text-gray-600 mt-1">
-              Manage your store data and settings
+              {isEditingDefault 
+                ? "Edit data displayed on the default analytics page (/analytics)" 
+                : "Manage your store data and settings"}
             </p>
       </div>
           
@@ -756,23 +756,44 @@ const AdminPage = () => {
                 <label htmlFor="store-select" className="block text-sm font-medium text-gray-700 mb-1">
                   Select Store
                 </label>
+                <div className="flex items-center gap-2">
                 <select
                   id="store-select"
                   className="w-full md:w-64 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  value={currentStoreId}
+                  value={isEditingDefault ? "default" : currentStoreId}
                   onChange={(e) => {
-                    const selectedStoreId = e.target.value;
-                    setCurrentStoreId(selectedStoreId);
-                    // Navigate directly to the store ID URL for consistent routing
-                    navigate(`/admin/${selectedStoreId}`);
+                    const selectedValue = e.target.value;
+                    if (selectedValue === "default") {
+                      setIsEditingDefault(true);
+                      setCurrentStoreId("default");
+                      navigate(`/admin/default`);
+                    } else {
+                      setIsEditingDefault(false);
+                      setCurrentStoreId(selectedValue);
+                      // Navigate directly to the store ID URL for consistent routing
+                      navigate(`/admin/${selectedValue}`);
+                    }
                   }}
                 >
+                  <option value="default" className="font-semibold">
+                    Default Analytics Page
+                  </option>
                   {availableStores.map((store) => (
                     <option key={store.id} value={store.id}>
-                      {store.name}
+                      {store.name} {store.id === defaultAnalyticsStoreId ? "(Default Analytics)" : ""}
                     </option>
                   ))}
                 </select>
+                {currentStoreId && !isEditingDefault && currentStoreId !== defaultAnalyticsStoreId && (
+                  <button
+                    className="p-2 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors whitespace-nowrap"
+                    onClick={() => handleSetDefaultAnalyticsStore(currentStoreId)}
+                    title="Set as default store for analytics page"
+                  >
+                    Set Default
+                  </button>
+                )}
+                </div>
               </div>
               <button
                 className="mt-5 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
@@ -1247,8 +1268,8 @@ const AdminPage = () => {
                 <div className="form-group mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Store Name
-                  </label>
-                  <input
+          </label>
+          <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     value={newStoreName}
@@ -1264,8 +1285,8 @@ const AdminPage = () => {
                 <div className="form-group mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Last Updated
-                  </label>
-                  <input
+          </label>
+          <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded-md bg-gray-50"
                     value={new Date(storeSettings.updatedAt).toLocaleString()}
@@ -1274,7 +1295,7 @@ const AdminPage = () => {
                   <p className="text-xs text-gray-500 mt-1">
                     The timestamp when your store settings were last modified.
                   </p>
-                </div>
+      </div>
 
                 <div className="form-actions space-y-2">
                   <button
@@ -1295,8 +1316,66 @@ const AdminPage = () => {
                   >
                     Reset Changes
                   </button>
+            </div>
+            </div>
+
+              {/* Default Analytics Store Section */}
+              {availableStores.length > 1 && (
+                <div className="mt-8 border-t pt-6">
+                  <h3 className="text-lg font-semibold mb-4">Default Analytics Store</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Select which store should be displayed by default when visiting the analytics page.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {availableStores.map(store => (
+                      <div key={store.id} className={`p-3 border rounded-lg flex items-center justify-between ${store.id === defaultAnalyticsStoreId ? 'bg-blue-50 border-blue-200' : 'border-gray-200'}`}>
+                        <div className="flex items-center gap-2">
+                          {store.id === defaultAnalyticsStoreId && (
+                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                          )}
+                          <span className="font-medium">{store.name}</span>
+                        </div>
+                        {store.id === defaultAnalyticsStoreId ? (
+                          <span className="text-sm text-blue-700">Current Default</span>
+                        ) : (
+            <button
+                            className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                            onClick={() => handleSetDefaultAnalyticsStore(store.id)}
+            >
+                            Set as Default
+            </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {defaultAnalyticsStoreId && (
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3 flex-1 md:flex md:justify-between">
+                          <p className="text-sm text-blue-700">
+                            When visiting the analytics page without specifying a store, users will see data for: <span className="font-bold">{availableStores.find(store => store.id === defaultAnalyticsStoreId)?.name}</span>
+                          </p>
+                          <a
+                            href="/analytics"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:text-blue-500 ml-3"
+                          >
+                            View Analytics →
+                          </a>
+                        </div>
+          </div>
+        </div>
+      )}
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="flex justify-center p-8">

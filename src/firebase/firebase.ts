@@ -40,6 +40,17 @@ export interface Store {
   [key: string]: any;
 }
 
+// Helper function to decide which collection path to use
+function getCollectionPath(storeId?: string): string {
+  if (!storeId) return "graphData";
+  
+  // If storeId is explicitly "default", use the main graphData collection
+  if (storeId === "default") return "graphData";
+  
+  // Otherwise use the store-specific path
+  return `stores/${storeId}/graphData`;
+}
+
 // Function to update store name
 export async function updateStoreName(name: string, storeId?: string) {
   try {
@@ -108,20 +119,41 @@ export async function addDayData(
   try {
     // Sign in anonymously
     await signInAnonymously(auth);
-    
-    const dividedValue = value / 24;
-    const data = new Array(24).fill(dividedValue);
 
-    // Use store-specific collection path if storeId is provided
-    const collectionPath = storeId ? `stores/${storeId}/graphData` : "graphData";
+    // Use helper function to get the correct path
+    const collectionPath = getCollectionPath(storeId);
+    const docRef = doc(db, collectionPath, date);
     
-    await setDoc(
-      doc(db, collectionPath, date),
-      {
-        [graph]: data,
-      },
-      { merge: true }
-    );
+    // Rest of the function remains the same...
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      // Get the existing data
+      const existingData = docSnap.data();
+      
+      // Get the values for the specified graph
+      const graphValues = existingData[graph] || new Array(24).fill(0);
+      
+      // Calculate the value per hour
+      const valuePerHour = value / 24;
+      
+      // Create a new array with the distributed value
+      const newValues = new Array(24).fill(valuePerHour);
+      
+      // Update the document with the new values
+      await updateDoc(docRef, {
+        [graph]: newValues
+      });
+    } else {
+      // Initialize the document with default values
+      await addData(date, storeId);
+      
+      // Then update with the specific graph data
+      const valuePerHour = value / 24;
+      await updateDoc(docRef, {
+        [graph]: new Array(24).fill(valuePerHour)
+      });
+    }
   } catch (e) {
     if (e instanceof FirebaseError) {
       console.log(`Firebase Error: (${e.code})`);
@@ -148,8 +180,8 @@ export async function readDayData(
     // Sign in anonymously
     await signInAnonymously(auth);
     
-    // Use store-specific collection path if storeId is provided
-    const collectionPath = storeId ? `stores/${storeId}/graphData` : "graphData";
+    // Use helper function to get the correct path
+    const collectionPath = getCollectionPath(storeId);
     const querySnapshot = await getDocs(collection(db, collectionPath));
 
     for (const doc of querySnapshot.docs) {
@@ -179,8 +211,8 @@ async function addData(date: string, storeId?: string) {
     // Sign in anonymously
     await signInAnonymously(auth);
     
-    // Use store-specific collection path if storeId is provided
-    const collectionPath = storeId ? `stores/${storeId}/graphData` : "graphData";
+    // Use helper function to get the correct path
+    const collectionPath = getCollectionPath(storeId);
     
     await setDoc(doc(db, collectionPath, date), {
       gross_sales: new Array(24).fill(0),
@@ -217,8 +249,8 @@ async function getData(date: string, storeId?: string) {
     await signInAnonymously(auth);
     
     var result: dataReturnType = {};
-    // Use store-specific collection path if storeId is provided
-    const collectionPath = storeId ? `stores/${storeId}/graphData` : "graphData";
+    // Use helper function to get the correct path
+    const collectionPath = getCollectionPath(storeId);
     
     await getDocs(collection(db, collectionPath)).then((querySnapshot) => {
       querySnapshot.forEach((doc) => {
@@ -243,8 +275,8 @@ export async function fetchData(date: string, storeId?: string): Promise<any> {
     // Sign in anonymously
     await signInAnonymously(auth);
 
-    // Use store-specific collection path if storeId is provided
-    const collectionPath = storeId ? `stores/${storeId}/graphData` : "graphData";
+    // Use helper function to get the correct path
+    const collectionPath = getCollectionPath(storeId);
     const docRef = doc(db, collectionPath, date);
     const docSnap = await getDoc(docRef);
 
@@ -271,8 +303,8 @@ export async function fetchData(date: string, storeId?: string): Promise<any> {
 
 export function updateDateData(date: string, data: dataReturnType, storeId?: string) {
   try {
-    // Use store-specific collection path if storeId is provided
-    const collectionPath = storeId ? `stores/${storeId}/graphData` : "graphData";
+    // Use helper function to get the correct path
+    const collectionPath = getCollectionPath(storeId);
     setDoc(doc(db, collectionPath, date), data);
   } catch (e) {
     if (e instanceof FirebaseError) {
@@ -758,6 +790,54 @@ export async function generateSampleData(storeId: string, multiplier: number = 1
       console.log(`Firebase Error: (${e.code})`);
     } else {
       console.error("Error generating sample data:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to set default store for analytics
+export async function setDefaultAnalyticsStore(storeId: string) {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    // Save the default store ID to a special settings document
+    const docRef = doc(db, "settings", "appSettings");
+    await setDoc(docRef, {
+      defaultAnalyticsStore: storeId,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    return { success: true };
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error setting default analytics store:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to get default analytics store
+export async function getDefaultAnalyticsStore() {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    const docRef = doc(db, "settings", "appSettings");
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists() && docSnap.data().defaultAnalyticsStore) {
+      return docSnap.data().defaultAnalyticsStore;
+    } else {
+      return null; // No default store set
+    }
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error getting default analytics store:", e);
     }
     throw e;
   }

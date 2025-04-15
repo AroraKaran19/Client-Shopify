@@ -13,6 +13,7 @@ const AppRouter = () => {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/analytics/:storeId" element={<AnalyticsPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin/:storeId" element={<AdminPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>
