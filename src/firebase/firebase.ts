@@ -128,11 +128,6 @@ export async function addDayData(
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      // Get the existing data
-      const existingData = docSnap.data();
-      
-      // Get the values for the specified graph
-      const graphValues = existingData[graph] || new Array(24).fill(0);
       
       // Calculate the value per hour
       const valuePerHour = value / 24;
