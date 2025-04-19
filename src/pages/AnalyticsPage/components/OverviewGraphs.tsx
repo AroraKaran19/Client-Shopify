@@ -175,7 +175,7 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                               (acc, curr) =>
                                 acc +
                                 (Array.isArray(curr.data)
-                                  ? curr.data.reduce((a, b) => a + b, 0)
+                                  ? Math.floor(curr.data.reduce((a, b) => a + b, 0))
                                   : 0),
                               0
                             )
@@ -190,7 +190,7 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                             (acc, curr) =>
                               acc +
                               (Array.isArray(curr.data)
-                                ? curr.data.reduce((a, b) => a + b, 0)
+                                ? Math.ceil(curr.data.reduce((a, b) => a + b, 0))
                                 : curr.data),
                             0
                           )

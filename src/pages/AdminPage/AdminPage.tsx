@@ -89,12 +89,14 @@ const AdminPage = () => {
   // Get store name from URL parameter
   const { storeId } = useParams<{ storeId?: string }>();
   const navigate = useNavigate();
-  
+
   // Store management states
-  const [availableStores, setAvailableStores] = useState<{id: string, name: string}[]>([]);
+  const [availableStores, setAvailableStores] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [currentStoreId, setCurrentStoreId] = useState<string>("");
   const [isEditingDefault, setIsEditingDefault] = useState<boolean>(false);
-  
+
   // State for tab navigation
   const [activeTab, setActiveTab] = useState<TabType>("daily");
 
@@ -103,7 +105,7 @@ const AdminPage = () => {
   const [selectedMetric, setSelectedMetric] = useState<string>("");
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [modalType, setModalType] = useState<"day" | "hour" | "month">("day");
-  
+
   // Daily data states
   const [date, setDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [entryMethod, setEntryMethod] = useState<"day" | "hour">("day");
@@ -122,12 +124,22 @@ const AdminPage = () => {
     "breakdown"
   );
 
+  // Date calculations
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1; // 1-12
+  const currentYear = today.getFullYear();
+  const currentDayOfMonth = today.getDate();
+  const isCurrentMonth =
+    selectedMonth === currentMonth && selectedYear === currentYear;
+
+  // For current month, only include days up to today
   // Settings states
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(
     null
   );
   const [newStoreName, setNewStoreName] = useState<string>("");
-  const [defaultAnalyticsStoreId, setDefaultAnalyticsStoreId] = useState<string>("");
+  const [defaultAnalyticsStoreId, setDefaultAnalyticsStoreId] =
+    useState<string>("");
 
   // Time labels for hourly data
   const timeLabels = Array.from({ length: 24 }, (_, i) => {
@@ -138,7 +150,7 @@ const AdminPage = () => {
 
   // References
   const modalRef = useRef<HTMLDivElement>(null);
-  
+
   // State for new store modal
   const [showNewStoreModal, setShowNewStoreModal] = useState<boolean>(false);
 
@@ -151,45 +163,8 @@ const AdminPage = () => {
   const handleTabChange = (tab: TabType) => {
     if (tab !== activeTab) {
       setActiveTab(tab);
-      
-      // Trigger a refresh of the relevant data
-      if (currentStoreId) {
-        if (tab === "settings") {
-          // Refresh settings data
-          const refreshSettings = async () => {
-            try {
-              setLoading(true);
-              const settings = await getStoreSettings(currentStoreId);
-              setStoreSettings(settings as StoreSettings);
-              setNewStoreName(settings.storeName);
-              setLoading(false);
-            } catch (error) {
-              console.error("Error refreshing settings:", error);
-              setLoading(false);
-            }
-          };
-          refreshSettings();
-        } else if (tab === "daily") {
-          // For daily data, toggle the entry method to force a refresh
-          setLoading(true);
-          const currentMethod = entryMethod;
-          setEntryMethod(currentMethod === "day" ? "hour" : "day");
-          setTimeout(() => {
-            setEntryMethod(currentMethod);
-            setLoading(false);
-          }, 10);
-        } else if (tab === "monthly") {
-          // For monthly data, trigger a refresh by toggling the month temporarily
-          setLoading(true);
-          const currentMonth = selectedMonth;
-          const nextMonth = (currentMonth + 1) % 12;
-          setSelectedMonth(nextMonth);
-          setTimeout(() => {
-            setSelectedMonth(currentMonth);
-            setLoading(false);
-          }, 10);
-        }
-      }
+
+      // Don't set loading here since each tab's useEffect will handle it
     }
   };
 
@@ -207,7 +182,7 @@ const AdminPage = () => {
           // Set default values for the default analytics page
           setStoreSettings({
             storeName: "Default Analytics Page",
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
           });
           setNewStoreName("Default Analytics Page");
         }
@@ -218,7 +193,7 @@ const AdminPage = () => {
       }
     };
 
-    if (currentStoreId || !storeId || isEditingDefault) {
+    if (currentStoreId || isEditingDefault) {
       fetchStoreSettings();
     }
   }, [currentStoreId, isEditingDefault]);
@@ -236,7 +211,7 @@ const AdminPage = () => {
         if (defaultStoreId) {
           setDefaultAnalyticsStoreId(defaultStoreId);
         }
-        
+
         // If a store name is provided in the URL, find the matching store
         if (storeId) {
           if (storeId.toLowerCase() === "default") {
@@ -245,15 +220,17 @@ const AdminPage = () => {
           } else {
             // Make URL comparison more flexible
             const formattedUrlName = storeId.toLowerCase();
-            const matchingStore = stores.find(store => {
+            const matchingStore = stores.find((store) => {
               // Check direct name match
               if (store.name.toLowerCase() === formattedUrlName) return true;
-              
+
               // Check URL-friendly version of the name
-              const urlFriendlyName = store.name.toLowerCase().replace(/\s+/g, '-');
+              const urlFriendlyName = store.name
+                .toLowerCase()
+                .replace(/\s+/g, "-");
               return urlFriendlyName === formattedUrlName;
             });
-            
+
             if (matchingStore) {
               setCurrentStoreId(matchingStore.id);
               setIsEditingDefault(false);
@@ -261,13 +238,13 @@ const AdminPage = () => {
               // If no matching store, try to create the store with this ID
               try {
                 const newStore = await getStoreById(storeId);
-                setAvailableStores(prevStores => [...prevStores, newStore]);
+                setAvailableStores((prevStores) => [...prevStores, newStore]);
                 setCurrentStoreId(newStore.id);
                 setIsEditingDefault(false);
               } catch (error) {
                 console.error("Error creating store from URL:", error);
                 // If creation fails, redirect to main admin page
-                navigate('/admin');
+                navigate("/admin");
               }
             }
           }
@@ -276,54 +253,52 @@ const AdminPage = () => {
           setCurrentStoreId(stores[0].id);
           setIsEditingDefault(false);
         }
-        
+
         setLoading(false);
       } catch (error) {
         console.error("Error fetching stores:", error);
         setLoading(false);
       }
     };
-    
+
     fetchStores();
-  }, [storeId, navigate]);
+    // Only run this on mount and when storeId changes, removing navigate from dependencies
+  }, [storeId]);
 
   useEffect(() => {
-    if (date && entryMethod === "hour") {
-      const main = document.querySelector("main");
-      if (main) {
-          main.style.overflowY = "hidden";
-          main.scrollTo({ top: 0, behavior: "smooth" });
-        }
-      }
-  }, [date, entryMethod]);
-
-  useEffect(() => {
-    if (date && entryMethod === "day") {
-    const fetchDayDataAsync = async () => {
-        return readDayData(date, selectedMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
-    };
+    if (date && entryMethod === "day" && selectedMetric) {
+      const fetchDayDataAsync = async () => {
+        return readDayData(
+          date,
+          selectedMetric as keyof DayData,
+          isEditingDefault ? "default" : currentStoreId || undefined
+        );
+      };
 
       fetchDayDataAsync().then((result) => {
         setDayData({ [selectedMetric as keyof DayData]: result });
       });
     }
-  }, [date, selectedMetric, currentStoreId, isEditingDefault]);
+  }, [date, selectedMetric, currentStoreId, isEditingDefault, entryMethod]);
 
   useEffect(() => {
-    if (date && entryMethod === "hour") {
+    if (date && entryMethod === "hour" && selectedMetric) {
       setLoading(true);
       const fetchDataAsync = async () => {
-        return fetchData(date, isEditingDefault ? "default" : currentStoreId || undefined);
+        return fetchData(
+          date,
+          isEditingDefault ? "default" : currentStoreId || undefined
+        );
       };
 
       fetchDataAsync()
         .then((result) => {
           const transformData = (metricKey: keyof typeof result) => {
-          return timeLabels.map((time, index) => ({
-            time,
+            return timeLabels.map((time, index) => ({
+              time,
               value: result[metricKey]?.[index] || 0,
-          }));
-        };
+            }));
+          };
 
           // Create a full DateData object instead of a partial one
           const updatedHourlyData = hourlyData || {
@@ -349,13 +324,21 @@ const AdminPage = () => {
           setLoading(false);
         });
     }
-  }, [date, selectedMetric, currentStoreId, isEditingDefault]);
+  }, [
+    date,
+    selectedMetric,
+    currentStoreId,
+    isEditingDefault,
+    entryMethod,
+    timeLabels,
+  ]);
 
   // Fetch month data
   useEffect(() => {
     const fetchMonthData = async () => {
-      if (!currentStoreId && !isEditingDefault) return;
-      
+      if ((!currentStoreId && !isEditingDefault) || activeTab !== "monthly")
+        return;
+
       try {
         setLoading(true);
 
@@ -363,10 +346,13 @@ const AdminPage = () => {
         const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
         const monthEnd = endOfMonth(monthStart);
 
-        // Get all days in the month
+        // If we're in the current month, only get days up to today
+        const effectiveEndDate = isCurrentMonth ? today : monthEnd;
+
+        // Get all days in the month (or up to today if current month)
         const daysInMonth = eachDayOfInterval({
           start: monthStart,
-          end: monthEnd,
+          end: effectiveEndDate,
         });
 
         // Initialize month data structure
@@ -383,7 +369,10 @@ const AdminPage = () => {
         // Fetch data for each day and aggregate
         for (const day of daysInMonth) {
           const dateStr = format(day, "yyyy-MM-dd");
-          const dayData = await fetchData(dateStr, isEditingDefault ? "default" : currentStoreId);
+          const dayData = await fetchData(
+            dateStr,
+            isEditingDefault ? "default" : currentStoreId
+          );
 
           // Store day data
           newMonthData.days[dateStr] = {};
@@ -416,7 +405,14 @@ const AdminPage = () => {
     };
 
     fetchMonthData();
-  }, [selectedMonth, selectedYear, currentStoreId, isEditingDefault]);
+  }, [
+    selectedMonth,
+    selectedYear,
+    currentStoreId,
+    isEditingDefault,
+    isCurrentMonth,
+    activeTab,
+  ]);
 
   // Modal handling
   const openModal = (type: "day" | "hour" | "month", metric: string) => {
@@ -463,7 +459,12 @@ const AdminPage = () => {
 
     try {
       setLoading(true);
-      await addDayData(date, value, selectedMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
+      await addDayData(
+        date,
+        value,
+        selectedMetric as keyof DayData,
+        isEditingDefault ? "default" : currentStoreId || undefined
+      );
 
       // Update local state
       setDayData((prev) => ({
@@ -504,7 +505,11 @@ const AdminPage = () => {
       });
 
       // Save to Firebase
-      await updateDateData(date, dataToSave as any, isEditingDefault ? "default" : currentStoreId || undefined);
+      await updateDateData(
+        date,
+        dataToSave as any,
+        isEditingDefault ? "default" : currentStoreId || undefined
+      );
 
       // Update local state
       setHourlyData(updatedHourlyData);
@@ -524,7 +529,7 @@ const AdminPage = () => {
     }
   };
 
-  // Save monthly data (distribute value across all days)
+  // Save monthly data (distribute value across days that have passed)
   const saveMonthlyData = async () => {
     if (!selectedMetric || !monthData) return;
 
@@ -536,19 +541,27 @@ const AdminPage = () => {
 
       // Get days in the month
       const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
-      const monthEnd = endOfMonth(monthStart);
+
+      // If we're in the current month, only distribute to days up to today
+      const effectiveEndDate = isCurrentMonth ? today : endOfMonth(monthStart);
+
       const daysInMonth = eachDayOfInterval({
         start: monthStart,
-        end: monthEnd,
+        end: effectiveEndDate,
       });
 
-      // Calculate value per day
+      // Calculate value per day based on actual days to distribute to
       const valuePerDay = totalValue / daysInMonth.length;
 
       // Update each day
       for (const day of daysInMonth) {
         const dateStr = format(day, "yyyy-MM-dd");
-        await addDayData(dateStr, valuePerDay, selectedMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
+        await addDayData(
+          dateStr,
+          valuePerDay,
+          selectedMetric as keyof DayData,
+          isEditingDefault ? "default" : currentStoreId || undefined
+        );
       }
 
       // Update local state
@@ -578,7 +591,7 @@ const AdminPage = () => {
   // Save store settings
   const saveStoreSettings = async () => {
     if (
-      isEditingDefault || 
+      isEditingDefault ||
       !storeSettings ||
       newStoreName === storeSettings.storeName ||
       !newStoreName.trim()
@@ -618,10 +631,10 @@ const AdminPage = () => {
   // UI Helpers
   const formatNumberWithCommas = (num: number) => {
     if (num >= 1000000) {
-      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
     }
     if (num >= 1000) {
-      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+      return (num / 1000).toFixed(1).replace(/\.0$/, "") + "k";
     }
     return num.toLocaleString(undefined, {
       minimumFractionDigits: 0,
@@ -642,29 +655,33 @@ const AdminPage = () => {
   // Function to handle new store creation
   const handleCreateStore = async () => {
     if (!newStoreName.trim()) return;
-    
+
     try {
       setLoading(true);
       const newStore = await createStore(newStoreName.trim());
-      
+
       // Add to available stores
-      setAvailableStores(prevStores => [...prevStores, newStore]);
-      
+      setAvailableStores((prevStores) => [...prevStores, newStore]);
+
       // Switch to the new store
       setCurrentStoreId(newStore.id);
       navigate(`/admin/${newStore.id}`);
-      
+
       // Close modal and reset form
       setShowNewStoreModal(false);
       setNewStoreName("");
       setLoading(false);
-      
+
       // Show success message using alert
       alert(`Store "${newStore.name}" successfully created!`);
     } catch (error) {
       console.error("Error creating store:", error);
       setLoading(false);
-      alert(`Failed to create store: ${error instanceof Error ? error.message : "Unknown error"}`);
+      alert(
+        `Failed to create store: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   };
 
@@ -681,14 +698,23 @@ const AdminPage = () => {
       setLoading(true);
       await setDefaultAnalyticsStore(storeId);
       setDefaultAnalyticsStoreId(storeId);
-      
+
       // Show success message
       alert(`Default analytics store set successfully!`);
+
+      // Refresh the list of stores to update the UI
+      const stores = await getAllStores();
+      setAvailableStores(stores);
+
       setLoading(false);
     } catch (error) {
       console.error("Error setting default analytics store:", error);
       setLoading(false);
-      alert(`Failed to set default analytics store: ${error instanceof Error ? error.message : "Unknown error"}`);
+      alert(
+        `Failed to set default analytics store: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   };
 
@@ -703,7 +729,12 @@ const AdminPage = () => {
       setLoading(true);
 
       // Save to Firebase
-      await addDayData(editingDay, value, editingMetric as keyof DayData, isEditingDefault ? "default" : currentStoreId || undefined);
+      await addDayData(
+        editingDay,
+        value,
+        editingMetric as keyof DayData,
+        isEditingDefault ? "default" : currentStoreId || undefined
+      );
 
       // Update local state
       const updatedMonthData = { ...monthData };
@@ -733,6 +764,17 @@ const AdminPage = () => {
     }
   };
 
+  // Restore scrolling behavior when entry method is hour
+  useEffect(() => {
+    if (entryMethod === "hour") {
+      const main = document.querySelector("main");
+      if (main) {
+        main.style.overflowY = "hidden";
+        main.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  }, [entryMethod]);
+
   return (
     <div className="admin-page h-full w-full p-4 md:p-6 relative bg-gray-50">
       {/* Page Header */}
@@ -740,59 +782,70 @@ const AdminPage = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
-              Admin Dashboard {isEditingDefault ? "- Default Analytics Page" : ""}
+              Admin Dashboard{" "}
+              {isEditingDefault ? "- Default Analytics Page" : ""}
             </h1>
             <p className="text-gray-600 mt-1">
-              {isEditingDefault 
-                ? "Edit data displayed on the default analytics page (/analytics)" 
+              {isEditingDefault
+                ? "Edit data displayed on the default analytics page (/analytics)"
                 : "Manage your store data and settings"}
             </p>
-      </div>
-          
+          </div>
+
           {/* Store Selector */}
           {availableStores.length > 0 && (
             <div className="store-selector flex items-center gap-3">
               <div>
-                <label htmlFor="store-select" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="store-select"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Select Store
                 </label>
                 <div className="flex items-center gap-2">
-                <select
-                  id="store-select"
-                  className="w-full md:w-64 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                  value={isEditingDefault ? "default" : currentStoreId}
-                  onChange={(e) => {
-                    const selectedValue = e.target.value;
-                    if (selectedValue === "default") {
-                      setIsEditingDefault(true);
-                      setCurrentStoreId("default");
-                      navigate(`/admin/default`);
-                    } else {
-                      setIsEditingDefault(false);
-                      setCurrentStoreId(selectedValue);
-                      // Navigate directly to the store ID URL for consistent routing
-                      navigate(`/admin/${selectedValue}`);
-                    }
-                  }}
-                >
-                  <option value="default" className="font-semibold">
-                    Default Analytics Page
-                  </option>
-                  {availableStores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name} {store.id === defaultAnalyticsStoreId ? "(Default Analytics)" : ""}
-                    </option>
-                  ))}
-                </select>
-                {currentStoreId && !isEditingDefault && currentStoreId !== defaultAnalyticsStoreId && (
-                  <button
-                    className="p-2 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors whitespace-nowrap"
-                    onClick={() => handleSetDefaultAnalyticsStore(currentStoreId)}
-                    title="Set as default store for analytics page"
+                  <select
+                    id="store-select"
+                    className="w-full md:w-64 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    value={isEditingDefault ? "default" : currentStoreId}
+                    onChange={(e) => {
+                      const selectedValue = e.target.value;
+                      if (selectedValue === "default") {
+                        setIsEditingDefault(true);
+                        setCurrentStoreId("default");
+                        navigate(`/admin/default`);
+                      } else {
+                        setIsEditingDefault(false);
+                        setCurrentStoreId(selectedValue);
+                        // Navigate directly to the store ID URL for consistent routing
+                        navigate(`/admin/${selectedValue}`);
+                      }
+                    }}
                   >
-                    Set Default
-                  </button>
-                )}
+                    <option value="default" className="font-semibold">
+                      Default Analytics Page
+                    </option>
+                    {availableStores.map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.name}{" "}
+                        {store.id === defaultAnalyticsStoreId
+                          ? "(Default Analytics)"
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {currentStoreId &&
+                    !isEditingDefault &&
+                    currentStoreId !== defaultAnalyticsStoreId && (
+                      <button
+                        className="p-2 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors whitespace-nowrap"
+                        onClick={() =>
+                          handleSetDefaultAnalyticsStore(currentStoreId)
+                        }
+                        title="Set as default store for analytics page"
+                      >
+                        Set Default
+                      </button>
+                    )}
                 </div>
               </div>
               <button
@@ -866,11 +919,11 @@ const AdminPage = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Select Date
             </label>
-          <input
-            type="date"
+            <input
+              type="date"
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               value={date}
-            onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => setDate(e.target.value)}
               max={format(new Date(), "yyyy-MM-dd")}
             />
           </div>
@@ -949,7 +1002,7 @@ const AdminPage = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Select Month
               </label>
-          <select
+              <select
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -957,9 +1010,9 @@ const AdminPage = () => {
                 {months.map((month) => (
                   <option key={month} value={month}>
                     {getMonthName(month)}
-            </option>
+                  </option>
                 ))}
-          </select>
+              </select>
             </div>
 
             <div className="flex-1 min-w-[200px]">
@@ -1014,8 +1067,8 @@ const AdminPage = () => {
                   View Mode:
                 </div>
                 <div className="inline-flex rounded-md shadow-sm" role="group">
-                      <button
-                        type="button"
+                  <button
+                    type="button"
                     className={`px-4 py-2 text-sm font-medium border ${
                       monthlyViewMode === "bulk"
                         ? "bg-blue-50 text-blue-700 border-blue-200"
@@ -1045,8 +1098,13 @@ const AdminPage = () => {
                     Bulk Distribution
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    Select a metric and enter a value to distribute evenly
-                    across all days in the month.
+                    {isCurrentMonth
+                      ? `Enter the total value for ${getMonthName(
+                          selectedMonth
+                        )} ${selectedYear} (first ${currentDayOfMonth} days only). This value will be distributed evenly across all days that have passed so far.`
+                      : `Enter the total value for ${getMonthName(
+                          selectedMonth
+                        )} ${selectedYear}. This value will be distributed evenly across all days of the month.`}
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1086,18 +1144,21 @@ const AdminPage = () => {
                         />
                         <button
                           className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                        onClick={() => {
+                          onClick={() => {
                             if (selectedMetric)
                               openModal("month", selectedMetric);
                           }}
                           disabled={!selectedMetric}
                         >
                           Distribute
-                      </button>
-                </div>
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        This will evenly distribute the total across all{" "}
-                        {Object.keys(monthData.days).length} days in the month.
+                        This will evenly distribute the total across{" "}
+                        {isCurrentMonth
+                          ? `only the first ${currentDayOfMonth} days`
+                          : "all days"}{" "}
+                        in {getMonthName(selectedMonth)}.
                       </p>
                     </div>
                   </div>
@@ -1156,7 +1217,7 @@ const AdminPage = () => {
                                         }
                                         autoFocus
                                       />
-                <button
+                                      <button
                                         className="p-1 text-green-600 hover:text-green-800"
                                         onClick={saveDayEdit}
                                         title="Save"
@@ -1175,7 +1236,7 @@ const AdminPage = () => {
                                             d="M5 13l4 4L19 7"
                                           />
                                         </svg>
-                </button>
+                                      </button>
                                       <button
                                         className="p-1 text-red-600 hover:text-red-800"
                                         onClick={() => {
@@ -1268,8 +1329,8 @@ const AdminPage = () => {
                 <div className="form-group mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Store Name
-          </label>
-          <input
+                  </label>
+                  <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     value={newStoreName}
@@ -1277,16 +1338,16 @@ const AdminPage = () => {
                     placeholder="Enter your store name"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    This name will be displayed throughout your store's dashboard
-                    and reports.
+                    This name will be displayed throughout your store's
+                    dashboard and reports.
                   </p>
                 </div>
 
                 <div className="form-group mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Last Updated
-          </label>
-          <input
+                  </label>
+                  <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded-md bg-gray-50"
                     value={new Date(storeSettings.updatedAt).toLocaleString()}
@@ -1295,7 +1356,7 @@ const AdminPage = () => {
                   <p className="text-xs text-gray-500 mt-1">
                     The timestamp when your store settings were last modified.
                   </p>
-      </div>
+                </div>
 
                 <div className="form-actions space-y-2">
                   <button
@@ -1316,66 +1377,8 @@ const AdminPage = () => {
                   >
                     Reset Changes
                   </button>
-            </div>
-            </div>
-
-              {/* Default Analytics Store Section */}
-              {availableStores.length > 1 && (
-                <div className="mt-8 border-t pt-6">
-                  <h3 className="text-lg font-semibold mb-4">Default Analytics Store</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Select which store should be displayed by default when visiting the analytics page.
-                  </p>
-                  
-                  <div className="space-y-3">
-                    {availableStores.map(store => (
-                      <div key={store.id} className={`p-3 border rounded-lg flex items-center justify-between ${store.id === defaultAnalyticsStoreId ? 'bg-blue-50 border-blue-200' : 'border-gray-200'}`}>
-                        <div className="flex items-center gap-2">
-                          {store.id === defaultAnalyticsStoreId && (
-                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                          )}
-                          <span className="font-medium">{store.name}</span>
-                        </div>
-                        {store.id === defaultAnalyticsStoreId ? (
-                          <span className="text-sm text-blue-700">Current Default</span>
-                        ) : (
-            <button
-                            className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                            onClick={() => handleSetDefaultAnalyticsStore(store.id)}
-            >
-                            Set as Default
-            </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {defaultAnalyticsStoreId && (
-                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2h2a1 1 0 100-2H9z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3 flex-1 md:flex md:justify-between">
-                          <p className="text-sm text-blue-700">
-                            When visiting the analytics page without specifying a store, users will see data for: <span className="font-bold">{availableStores.find(store => store.id === defaultAnalyticsStoreId)?.name}</span>
-                          </p>
-                          <a
-                            href="/analytics"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-600 hover:text-blue-500 ml-3"
-                          >
-                            View Analytics →
-                          </a>
-                        </div>
-          </div>
-        </div>
-      )}
                 </div>
-              )}
+              </div>
             </div>
           ) : (
             <div className="flex justify-center p-8">
@@ -1426,7 +1429,11 @@ const AdminPage = () => {
                       ? `Enter the total value for ${format(
                           new Date(date),
                           "MMMM d, yyyy"
-                        )}`
+                        )}.`
+                      : isCurrentMonth
+                      ? `Enter the total value for ${getMonthName(
+                          selectedMonth
+                        )} ${selectedYear} (first ${currentDayOfMonth} days only). This value will be distributed evenly across all days that have passed so far.`
                       : `Enter the total value for ${getMonthName(
                           selectedMonth
                         )} ${selectedYear}. This value will be distributed evenly across all days of the month.`}
@@ -1465,27 +1472,27 @@ const AdminPage = () => {
                             className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
                             Time
-                    </th>
+                          </th>
                           <th
                             scope="col"
                             className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
                             Value
-                    </th>
-                  </tr>
-                </thead>
+                          </th>
+                        </tr>
+                      </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {timeLabels.map((time, index) => (
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                               {time}
-                          </td>
+                            </td>
                             <td className="px-4 py-2 whitespace-nowrap">
-                            <input
-                              type="number"
+                              <input
+                                type="number"
                                 className="w-full p-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={editableHourlyData[index] || 0}
-                              onChange={(e) => {
+                                onChange={(e) => {
                                   const newValue = parseFloat(e.target.value);
                                   const newData = [...editableHourlyData];
                                   newData[index] = isNaN(newValue)
@@ -1495,20 +1502,20 @@ const AdminPage = () => {
                                 }}
                                 min="0"
                                 step="0.01"
-                            />
-                          </td>
-                        </tr>
+                              />
+                            </td>
+                          </tr>
                         ))}
-                </tbody>
-              </table>
-            </div>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
             <div className="modal-footer flex justify-end gap-2 p-4 border-t">
-            <button
+              <button
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
                 onClick={closeModal}
               >
@@ -1523,7 +1530,7 @@ const AdminPage = () => {
                 }}
               >
                 Save Changes
-            </button>
+              </button>
             </div>
           </div>
         </div>
@@ -1535,7 +1542,10 @@ const AdminPage = () => {
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Create New Store</h2>
             <div className="mb-4">
-              <label htmlFor="new-store-name" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="new-store-name"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Store Name
               </label>
               <input
@@ -1552,7 +1562,7 @@ const AdminPage = () => {
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
                 onClick={() => {
                   setShowNewStoreModal(false);
-                  setNewStoreName('');
+                  setNewStoreName("");
                 }}
               >
                 Cancel

@@ -38,6 +38,8 @@ const MulitAxisChartPercent = ({
       fill: false,
       backgroundColor: "#fff",
       borderColor: "#4eb5e2",
+      tension: 0.4,
+      pointRadius: 0,
     })),
   };
 
