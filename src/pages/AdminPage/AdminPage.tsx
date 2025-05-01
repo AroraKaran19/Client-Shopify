@@ -7,10 +7,12 @@ import {
   getStoreSettings,
   updateStoreName,
   getAllStores,
-  createStore,
   getStoreById,
   setDefaultAnalyticsStore,
   getDefaultAnalyticsStore,
+  updateStoreImage,
+  removeDefaultAnalyticsStore,
+  GraphType,
 } from "@/firebase/firebase";
 import {
   format,
@@ -22,6 +24,11 @@ import {
 } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useStore } from "@/StoreContext";
+
+// Import the StoreSelector component
+import StoreSelector from "./components/StoreSelector";
+import MonthlyDataTab from "./components/MonthlyDataTab";
 
 // Constants
 const GRAPHS = [
@@ -32,16 +39,18 @@ const GRAPHS = [
   "total_sales_over_time",
   "conversion_rate_over_time",
   "average_order_value_over_time",
-];
+  "conversion_rate_breakdown",
+] as const;
 
 const GRAPH_LABELS = [
-  "Gross sales",
-  "Returning customer rate",
-  "Orders fulfilled",
+  "Gross Sales",
+  "Returning Customer Rate",
+  "Orders Fulfilled",
   "Orders",
-  "Total sales over time",
-  "Conversion rate over time",
-  "Average order value over time",
+  "Total Sales Over Time",
+  "Conversion Rate Over Time",
+  "Average Order Value Over Time",
+  "Conversion Rate Breakdown",
 ];
 
 // Interfaces
@@ -53,17 +62,12 @@ interface DateData {
   total_sales_over_time: { time: string; value: number }[];
   conversion_rate_over_time: { time: string; value: number }[];
   average_order_value_over_time: { time: string; value: number }[];
+  conversion_rate_breakdown: { time: string; value: number }[];
 }
 
-interface DayData {
-  gross_sales?: number;
-  returning_customer_rate?: number;
-  orders_fulfilled?: number;
-  orders?: number;
-  total_sales_over_time?: number;
-  conversion_rate_over_time?: number;
-  average_order_value_over_time?: number;
-}
+type DayData = {
+  [K in GraphType]?: number;
+};
 
 interface StoreSettings {
   storeName: string;
@@ -89,6 +93,9 @@ const AdminPage = () => {
   // Get store name from URL parameter
   const { storeId } = useParams<{ storeId?: string }>();
   const navigate = useNavigate();
+
+  // Get store context with renamed function to avoid conflicts
+  const { setCurrentStoreId: setGlobalStoreId, refreshStoreInfo } = useStore();
 
   // Store management states
   const [availableStores, setAvailableStores] = useState<
@@ -141,28 +148,37 @@ const AdminPage = () => {
   const [defaultAnalyticsStoreId, setDefaultAnalyticsStoreId] =
     useState<string>("");
 
-  // Time labels for hourly data
-  const timeLabels = Array.from({ length: 24 }, (_, i) => {
-    const hour = i % 12 === 0 ? 12 : i % 12;
-    const period = i < 12 ? "AM" : "PM";
-    return `${hour}:00 ${period}`;
-  });
+  // Create a stable reference to timeLabels
+  const timeLabelsRef = useRef(
+    Array.from({ length: 24 }, (_, i) => {
+      const hour = i % 12 === 0 ? 12 : i % 12;
+      const period = i < 12 ? "AM" : "PM";
+      return `${hour}:00 ${period}`;
+    })
+  );
 
   // References
   const modalRef = useRef<HTMLDivElement>(null);
-
-  // State for new store modal
-  const [showNewStoreModal, setShowNewStoreModal] = useState<boolean>(false);
 
   // Add state for editing individual days
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [editingMetric, setEditingMetric] = useState<string | null>(null);
   const [dayValue, setDayValue] = useState<string>("");
 
+  // New image states
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   // Function to handle tab change
   const handleTabChange = (tab: TabType) => {
     if (tab !== activeTab) {
       setActiveTab(tab);
+
+      // Make sure we restore scrolling when switching tabs
+      const main = document.querySelector("main");
+      if (main) {
+        main.style.overflowY = "auto";
+      }
 
       // Don't set loading here since each tab's useEffect will handle it
     }
@@ -178,6 +194,9 @@ const AdminPage = () => {
           const settings = await getStoreSettings(currentStoreId || undefined);
           setStoreSettings(settings as StoreSettings);
           setNewStoreName(settings.storeName);
+          
+          // Update the global store context
+          setGlobalStoreId(currentStoreId);
         } else {
           // Set default values for the default analytics page
           setStoreSettings({
@@ -185,6 +204,9 @@ const AdminPage = () => {
             updatedAt: new Date().toISOString(),
           });
           setNewStoreName("Default Analytics Page");
+          
+          // Update the global store context
+          setGlobalStoreId(null);
         }
         setLoading(false);
       } catch (error) {
@@ -196,7 +218,7 @@ const AdminPage = () => {
     if (currentStoreId || isEditingDefault) {
       fetchStoreSettings();
     }
-  }, [currentStoreId, isEditingDefault]);
+  }, [currentStoreId, isEditingDefault, setGlobalStoreId]);
 
   // Fetch available stores
   useEffect(() => {
@@ -265,73 +287,159 @@ const AdminPage = () => {
     // Only run this on mount and when storeId changes, removing navigate from dependencies
   }, [storeId]);
 
+  // Fetch data for the day when date or entry method changes
   useEffect(() => {
-    if (date && entryMethod === "day" && selectedMetric) {
-      const fetchDayDataAsync = async () => {
-        return readDayData(
-          date,
-          selectedMetric as keyof DayData,
-          isEditingDefault ? "default" : currentStoreId || undefined
-        );
-      };
+    // Only fetch day data for the selected date regardless of entry method
+    if (!date || (!currentStoreId && !isEditingDefault)) return;
 
-      fetchDayDataAsync().then((result) => {
-        setDayData({ [selectedMetric as keyof DayData]: result });
-      });
+    // If we're in daily mode, let's get the total values for each metric
+    const fetchDailyTotals = async () => {
+      try {
+        setLoading(true);
+        const dailyTotals: DayData = {};
+
+        // Fetch all metrics in parallel for better performance
+        const fetchPromises = GRAPHS.map((metric) =>
+          readDayData(
+            date,
+            metric,
+            isEditingDefault ? "default" : currentStoreId || undefined
+          ).then((result) => {
+            dailyTotals[metric] = result || 0;
+          })
+        );
+
+        await Promise.all(fetchPromises);
+        setDayData(dailyTotals);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching daily totals:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchDailyTotals();
+  }, [date, currentStoreId, isEditingDefault]);
+
+  // Handle entry method change - fetch hourly data when switching to hourly view
+  useEffect(() => {
+    if (entryMethod === "hour") {
+      fetchHourlyData();
     }
-  }, [date, selectedMetric, currentStoreId, isEditingDefault, entryMethod]);
+  }, [entryMethod, date, currentStoreId, isEditingDefault]);
 
-  useEffect(() => {
-    if (date && entryMethod === "hour" && selectedMetric) {
-      setLoading(true);
-      const fetchDataAsync = async () => {
-        return fetchData(
-          date,
-          isEditingDefault ? "default" : currentStoreId || undefined
-        );
-      };
+  // Function to fetch hourly data - separate function to be called when needed
+  const fetchHourlyData = async () => {
+    if (!date) return;
 
-      fetchDataAsync()
-        .then((result) => {
-          const transformData = (metricKey: keyof typeof result) => {
-            return timeLabels.map((time, index) => ({
+    setLoading(true);
+
+    try {
+      // Fetch complete document from Firebase
+      const rawData = await fetchData(
+        date,
+        isEditingDefault ? "default" : currentStoreId || undefined
+      );
+
+      if (!rawData) {
+        // If no data, create empty time-value arrays for all metrics
+        const emptyHourlyData: DateData = {} as DateData;
+
+        GRAPHS.forEach((metric) => {
+          emptyHourlyData[metric as keyof DateData] = timeLabelsRef.current.map(
+            (time) => ({
               time,
-              value: result[metricKey]?.[index] || 0,
-            }));
-          };
-
-          // Create a full DateData object instead of a partial one
-          const updatedHourlyData = hourlyData || {
-            gross_sales: [],
-            returning_customer_rate: [],
-            orders_fulfilled: [],
-            orders: [],
-            total_sales_over_time: [],
-            conversion_rate_over_time: [],
-            average_order_value_over_time: [],
-          };
-
-          // Update only the selected metric
-          updatedHourlyData[selectedMetric as keyof DateData] = transformData(
-            selectedMetric as keyof typeof result
+              value: 0,
+            })
           );
-
-          setHourlyData(updatedHourlyData);
-          setLoading(false);
-        })
-        .catch((error) => {
-          console.error("Error fetching data:", error);
-          setLoading(false);
         });
+
+        setHourlyData(emptyHourlyData);
+        if (selectedMetric) {
+          setEditableHourlyData(new Array(24).fill(0));
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Transform raw data into the DateData format
+      const formattedData: DateData = {} as DateData;
+
+      GRAPHS.forEach((metric) => {
+        // Check if this metric has data in the Firebase document
+        const metricData = rawData[metric];
+
+        if (Array.isArray(metricData) && metricData.length > 0) {
+          // Create a normalized array of exactly 24 values
+          const normalizedData = [...metricData];
+          while (normalizedData.length < 24) normalizedData.push(0);
+
+          // Transform to time-value pairs
+          formattedData[metric as keyof DateData] = timeLabelsRef.current.map(
+            (time, index) => ({
+              time,
+              value: index < normalizedData.length ? normalizedData[index] : 0,
+            })
+          );
+        } else {
+          // Create empty time-value pairs if no data
+          formattedData[metric as keyof DateData] = timeLabelsRef.current.map(
+            (time) => ({
+              time,
+              value: 0,
+            })
+          );
+        }
+      });
+
+      // Update state with formatted data
+      setHourlyData(formattedData);
+
+      // If a metric is selected, update editable data
+      if (selectedMetric && rawData[selectedMetric]) {
+        const metricValues = rawData[selectedMetric];
+        if (Array.isArray(metricValues)) {
+          // Ensure we have exactly 24 values by padding or truncating
+          const normalizedValues = [...metricValues];
+          while (normalizedValues.length < 24) normalizedValues.push(0);
+          setEditableHourlyData(normalizedValues.slice(0, 24));
+        } else {
+          setEditableHourlyData(new Array(24).fill(0));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching hourly data:", error);
+      // Create empty data on error to prevent UI issues
+      const fallbackData: DateData = {} as DateData;
+
+      GRAPHS.forEach((metric) => {
+        fallbackData[metric as keyof DateData] = timeLabelsRef.current.map(
+          (time) => ({
+            time,
+            value: 0,
+          })
+        );
+      });
+
+      setHourlyData(fallbackData);
+      setEditableHourlyData(new Array(24).fill(0));
+    } finally {
+      setLoading(false);
     }
-  }, [
-    date,
-    selectedMetric,
-    currentStoreId,
-    isEditingDefault,
-    entryMethod,
-    timeLabels,
-  ]);
+  };
+
+  // Update editable data when selected metric changes in hourly mode
+  useEffect(() => {
+    if (entryMethod === "hour" && selectedMetric && hourlyData) {
+      const metricData = hourlyData[selectedMetric as keyof DateData];
+      if (metricData && metricData.length > 0) {
+        // Extract just the values from the time-value pairs
+        setEditableHourlyData(metricData.map((item) => item.value));
+      } else {
+        setEditableHourlyData(new Array(24).fill(0));
+      }
+    }
+  }, [selectedMetric, hourlyData, entryMethod]);
 
   // Fetch month data
   useEffect(() => {
@@ -416,12 +524,44 @@ const AdminPage = () => {
 
   // Modal handling
   const openModal = (type: "day" | "hour" | "month", metric: string) => {
+    // Set these states first to prevent UI flickers
     setSelectedMetric(metric);
     setModalType(type);
-    setModalOpen(true);
 
-    // Initialize editable data based on modal type
-    if (type === "hour" && hourlyData) {
+    // Only fetch hourly data if we're opening the hourly modal and don't have data yet
+    if (
+      type === "hour" &&
+      (!hourlyData || !hourlyData[metric as keyof DateData]?.length)
+    ) {
+      setLoading(true);
+
+      // Fetch the data, then open modal
+      fetchHourlyData()
+        .then(() => {
+          // Initialize editable data based on the fetched hourly data
+          if (hourlyData && hourlyData[metric as keyof DateData]?.length > 0) {
+            setEditableHourlyData(
+              hourlyData[metric as keyof DateData].map((item) => item.value)
+            );
+          } else {
+            setEditableHourlyData(new Array(24).fill(0));
+          }
+
+          // Now open the modal
+          setModalOpen(true);
+        })
+        .catch((error) => {
+          console.error("Error loading hourly data for modal:", error);
+          // Open modal with empty data in case of error
+          setEditableHourlyData(new Array(24).fill(0));
+          setModalOpen(true);
+        });
+
+      return; // Don't open modal yet - wait for data
+    }
+
+    // Prepare editable data for the modal
+    if (type === "hour" && hourlyData?.[metric as keyof DateData]) {
       setEditableHourlyData(
         hourlyData[metric as keyof DateData].map((item) => item.value)
       );
@@ -431,13 +571,13 @@ const AdminPage = () => {
     } else if (type === "month" && monthData) {
       const value = monthData.totals[metric] || 0;
       setBulkMonthValue(value.toString());
+    } else if (type === "hour") {
+      // Fallback for hourly view if data not available
+      setEditableHourlyData(new Array(24).fill(0));
     }
 
-    // Prevent background scrolling
-    const main = document.querySelector("main");
-    if (main) {
-      main.style.overflowY = "hidden";
-    }
+    // Open the modal
+    setModalOpen(true);
   };
 
   const closeModal = () => {
@@ -482,49 +622,65 @@ const AdminPage = () => {
 
   // Save hourly data (24 values)
   const saveHourlyData = async () => {
-    if (!selectedMetric || !date || !hourlyData) return;
+    if (!selectedMetric || !date) {
+      console.error("Cannot save hourly data: missing metric or date");
+      return;
+    }
 
     try {
       setLoading(true);
 
-      // Create updated hourly data
-      const updatedHourlyData = { ...hourlyData };
-      updatedHourlyData[selectedMetric as keyof DateData] = timeLabels.map(
-        (time, index) => ({
-          time,
-          value: editableHourlyData[index] || 0,
-        })
-      );
+      // Step 1: Get the current data to ensure we don't overwrite other metrics
+      const currentData =
+        (await fetchData(
+          date,
+          isEditingDefault ? "default" : currentStoreId || undefined
+        )) || {};
 
-      // Convert to Firebase format
-      const dataToSave: Record<string, number[]> = {};
+      // Step 2: Create a complete data object for saving
+      const dataToSave = { ...currentData };
 
-      // Extract just the values from each time entry
-      Object.entries(updatedHourlyData).forEach(([key, timeEntries]) => {
-        dataToSave[key] = timeEntries.map((entry) => entry.value);
-      });
+      // Step 3: Update the selected metric with our edited values
+      // Make sure we have exactly 24 values
+      const normalizedValues = [...editableHourlyData];
+      while (normalizedValues.length < 24) normalizedValues.push(0);
+      dataToSave[selectedMetric] = normalizedValues.slice(0, 24);
 
-      // Save to Firebase
+      // Step 4: Save to Firebase
       await updateDateData(
         date,
-        dataToSave as any,
+        dataToSave,
         isEditingDefault ? "default" : currentStoreId || undefined
       );
 
-      // Update local state
-      setHourlyData(updatedHourlyData);
+      // Step 5: Update local state
+      // Update hourly data display
+      if (hourlyData) {
+        const updatedHourlyData = { ...hourlyData };
+        updatedHourlyData[selectedMetric as keyof DateData] =
+          timeLabelsRef.current.map((time, index) => ({
+            time,
+            value: normalizedValues[index] || 0,
+          }));
+        setHourlyData(updatedHourlyData);
+      }
 
-      // Update day totals
-      const dayTotal = editableHourlyData.reduce((sum, val) => sum + val, 0);
+      // Update day total for this metric
+      const dayTotal = normalizedValues.reduce(
+        (sum, val) => sum + (val || 0),
+        0
+      );
       setDayData((prev) => ({
         ...prev,
         [selectedMetric]: dayTotal,
       }));
 
+      // Success - close modal and finish
       closeModal();
-      setLoading(false);
     } catch (error) {
       console.error("Error saving hourly data:", error);
+      alert("Failed to save hourly data. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -533,7 +689,7 @@ const AdminPage = () => {
   const saveMonthlyData = async () => {
     if (!selectedMetric || !monthData) return;
 
-    const totalValue = parseInt(bulkMonthValue);
+    const totalValue = parseFloat(bulkMonthValue);
     if (isNaN(totalValue)) return;
 
     try {
@@ -551,14 +707,25 @@ const AdminPage = () => {
       });
 
       // Calculate value per day based on actual days to distribute to
-      const valuePerDay = totalValue / daysInMonth.length;
-
+      // Round to 2 decimal places to avoid floating point errors
+      const valuePerDay = parseFloat((totalValue / daysInMonth.length).toFixed(2));
+      
+      // Handle any rounding errors by adding the difference to the first day
+      const roundingError = totalValue - (valuePerDay * daysInMonth.length);
+      
       // Update each day
-      for (const day of daysInMonth) {
+      for (let i = 0; i < daysInMonth.length; i++) {
+        const day = daysInMonth[i];
         const dateStr = format(day, "yyyy-MM-dd");
+        
+        // Add any rounding difference to the first day to ensure total is exact
+        const dayValue = i === 0 
+          ? parseFloat((valuePerDay + roundingError).toFixed(2)) 
+          : valuePerDay;
+          
         await addDayData(
           dateStr,
-          valuePerDay,
+          dayValue,
           selectedMetric as keyof DayData,
           isEditingDefault ? "default" : currentStoreId || undefined
         );
@@ -568,15 +735,21 @@ const AdminPage = () => {
       const updatedMonthData = { ...monthData };
 
       // Update day values
-      daysInMonth.forEach((day) => {
+      daysInMonth.forEach((day, index) => {
         const dateStr = format(day, "yyyy-MM-dd");
         if (!updatedMonthData.days[dateStr]) {
           updatedMonthData.days[dateStr] = {};
         }
-        updatedMonthData.days[dateStr][selectedMetric] = valuePerDay;
+        
+        // Add any rounding difference to the first day
+        const dayValue = index === 0 
+          ? parseFloat((valuePerDay + roundingError).toFixed(2)) 
+          : valuePerDay;
+          
+        updatedMonthData.days[dateStr][selectedMetric] = dayValue;
       });
 
-      // Update total
+      // Update total with original value to maintain accuracy
       updatedMonthData.totals[selectedMetric] = totalValue;
 
       setMonthData(updatedMonthData);
@@ -585,6 +758,14 @@ const AdminPage = () => {
     } catch (error) {
       console.error("Error saving monthly data:", error);
       setLoading(false);
+      
+      // Check for Firebase quota errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("quota") || errorMessage.includes("resource-exhausted")) {
+        alert("Firebase quota exceeded. Please try again later or contact support.");
+      } else {
+        alert("Failed to distribute monthly data. Please try again.");
+      }
     }
   };
 
@@ -610,6 +791,12 @@ const AdminPage = () => {
         storeName: newStoreName.trim(),
         updatedAt: new Date().toISOString(),
       });
+      
+      // Update global store context
+      refreshStoreInfo();
+
+      // Dispatch event to update navbar
+      window.dispatchEvent(new Event('storeNameUpdated'));
 
       // Show success message using alert (could be replaced with a toast notification in a real app)
       alert(`Store name successfully updated to "${newStoreName.trim()}"`);
@@ -652,70 +839,11 @@ const AdminPage = () => {
   );
   const months = Array.from({ length: 12 }, (_, i) => i);
 
-  // Function to handle new store creation
-  const handleCreateStore = async () => {
-    if (!newStoreName.trim()) return;
-
-    try {
-      setLoading(true);
-      const newStore = await createStore(newStoreName.trim());
-
-      // Add to available stores
-      setAvailableStores((prevStores) => [...prevStores, newStore]);
-
-      // Switch to the new store
-      setCurrentStoreId(newStore.id);
-      navigate(`/admin/${newStore.id}`);
-
-      // Close modal and reset form
-      setShowNewStoreModal(false);
-      setNewStoreName("");
-      setLoading(false);
-
-      // Show success message using alert
-      alert(`Store "${newStore.name}" successfully created!`);
-    } catch (error) {
-      console.error("Error creating store:", error);
-      setLoading(false);
-      alert(
-        `Failed to create store: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  };
-
   // Function to handle individual day editing in table
   const handleDayEdit = (day: string, metric: string, currentValue: number) => {
     setEditingDay(day);
     setEditingMetric(metric);
     setDayValue(currentValue.toString());
-  };
-
-  // Function to handle setting default analytics store
-  const handleSetDefaultAnalyticsStore = async (storeId: string) => {
-    try {
-      setLoading(true);
-      await setDefaultAnalyticsStore(storeId);
-      setDefaultAnalyticsStoreId(storeId);
-
-      // Show success message
-      alert(`Default analytics store set successfully!`);
-
-      // Refresh the list of stores to update the UI
-      const stores = await getAllStores();
-      setAvailableStores(stores);
-
-      setLoading(false);
-    } catch (error) {
-      console.error("Error setting default analytics store:", error);
-      setLoading(false);
-      alert(
-        `Failed to set default analytics store: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
   };
 
   // Function to save individual day edit
@@ -764,16 +892,156 @@ const AdminPage = () => {
     }
   };
 
-  // Restore scrolling behavior when entry method is hour
-  useEffect(() => {
-    if (entryMethod === "hour") {
-      const main = document.querySelector("main");
-      if (main) {
-        main.style.overflowY = "hidden";
-        main.scrollTo({ top: 0, behavior: "smooth" });
+  // Function to handle saving all pending edits
+  const handleSaveAllPendingEdits = async (pendingEdits: Record<string, { metric: string; value: number }>) => {
+    
+    if (Object.keys(pendingEdits).length === 0 || !monthData) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Track successful edits to return to the child component
+      const successfulEdits: Record<string, boolean> = {};
+      
+      // Process edits one by one for better error handling
+      for (const key in pendingEdits) {
+        try {
+          const [day, metric] = key.split("-");
+          const { value } = pendingEdits[key];
+          
+          console.log(`Saving edit for ${day}, ${metric}: ${value}`);
+          
+          // Save to Firebase
+          await addDayData(
+            day,
+            value,
+            metric as keyof DayData,
+            isEditingDefault ? "default" : currentStoreId || undefined
+          );
+          
+          console.log(`Successfully saved to Firebase for ${day}, ${metric}`);
+          
+          // Mark as successful
+          successfulEdits[key] = true;
+          
+          // Update local state
+          const updatedMonthData = { ...monthData };
+          
+          // Calculate difference for the monthly total
+          const oldValue = updatedMonthData.days[day]?.[metric] || 0;
+          const difference = value - oldValue;
+          
+          console.log(`Updating local state, old: ${oldValue}, new: ${value}, diff: ${difference}`);
+          
+          // Update day value
+          if (!updatedMonthData.days[day]) {
+            updatedMonthData.days[day] = {};
+          }
+          updatedMonthData.days[day][metric] = value;
+          
+          // Update total
+          updatedMonthData.totals[metric] =
+            (updatedMonthData.totals[metric] || 0) + difference;
+            
+          setMonthData(updatedMonthData);
+        } catch (error) {
+          console.error(`Error saving edit for ${key}:`, error);
+          // Continue with other edits even if one fails
+        }
+      }
+      
+      setLoading(false);
+      
+      // Show success message with count of successful edits
+      const successCount = Object.keys(successfulEdits).length;
+      const totalCount = Object.keys(pendingEdits).length;
+      
+      if (successCount === totalCount) {
+        alert(`All ${totalCount} changes saved successfully!`);
+      } else if (successCount > 0) {
+        alert(`Saved ${successCount} out of ${totalCount} changes.`);
+      } else {
+        alert("Failed to save changes. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error in batch save operation:", error);
+      setLoading(false);
+      
+      // Check for Firebase quota errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes("quota") || errorMessage.includes("resource-exhausted")) {
+        alert("Firebase quota exceeded. Please try again later or contact support.");
+      } else {
+        alert("Failed to save changes. Please try again.");
       }
     }
+  };
+
+  // Restore scrolling behavior when entry method is hour
+  useEffect(() => {
+    const main = document.querySelector("main");
+
+    // Only when switching to hourly view
+    if (entryMethod === "hour") {
+      if (main) {
+        // Don't set overflow to hidden, just smooth scroll to top
+        main.scrollTo({ top: 0, behavior: "smooth" });
+        main.style.overflowY = "auto"; // Ensure scrolling is enabled
+      }
+    }
+
+    // Cleanup function to ensure we restore scrolling
+    return () => {
+      if (main) {
+        main.style.overflowY = "auto"; // Always ensure overflow is restored
+      }
+    };
   }, [entryMethod]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageUpload = async () => {
+    if (!selectedImage || !currentStoreId) return;
+
+    try {
+      // Here you would typically upload the image to a storage service
+      // For now, we'll just use the preview URL as a placeholder
+      await updateStoreImage(imagePreview || "", currentStoreId);
+      console.log("Store image updated successfully");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+    }
+  };
+
+  // Handle hourly data value change
+  const handleHourlyDataChange = (index: number, value: string) => {
+    const numValue = parseFloat(value);
+    const newData = [...editableHourlyData];
+    newData[index] = isNaN(numValue) ? 0 : numValue;
+    setEditableHourlyData(newData);
+  };
+
+  // Save day data wrapper for modal
+  const saveDayData = () => {
+    saveDailyValue();
+  };
+
+  // Save monthly data wrapper for modal
+  const saveMonthData = () => {
+    saveMonthlyData();
+  };
 
   return (
     <div className="admin-page h-full w-full p-4 md:p-6 relative bg-gray-50">
@@ -793,69 +1061,81 @@ const AdminPage = () => {
           </div>
 
           {/* Store Selector */}
-          {availableStores.length > 0 && (
-            <div className="store-selector flex items-center gap-3">
-              <div>
-                <label
-                  htmlFor="store-select"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Select Store
-                </label>
-                <div className="flex items-center gap-2">
-                  <select
-                    id="store-select"
-                    className="w-full md:w-64 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                    value={isEditingDefault ? "default" : currentStoreId}
-                    onChange={(e) => {
-                      const selectedValue = e.target.value;
-                      if (selectedValue === "default") {
-                        setIsEditingDefault(true);
-                        setCurrentStoreId("default");
-                        navigate(`/admin/default`);
-                      } else {
-                        setIsEditingDefault(false);
-                        setCurrentStoreId(selectedValue);
-                        // Navigate directly to the store ID URL for consistent routing
-                        navigate(`/admin/${selectedValue}`);
-                      }
-                    }}
-                  >
-                    <option value="default" className="font-semibold">
-                      Default Analytics Page
-                    </option>
-                    {availableStores.map((store) => (
-                      <option key={store.id} value={store.id}>
-                        {store.name}{" "}
-                        {store.id === defaultAnalyticsStoreId
-                          ? "(Default Analytics)"
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {currentStoreId &&
-                    !isEditingDefault &&
-                    currentStoreId !== defaultAnalyticsStoreId && (
-                      <button
-                        className="p-2 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors whitespace-nowrap"
-                        onClick={() =>
-                          handleSetDefaultAnalyticsStore(currentStoreId)
-                        }
-                        title="Set as default store for analytics page"
-                      >
-                        Set Default
-                      </button>
-                    )}
-                </div>
-              </div>
-              <button
-                className="mt-5 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                onClick={() => setShowNewStoreModal(true)}
-              >
-                Add Store
-              </button>
-            </div>
-          )}
+          <StoreSelector 
+            availableStores={availableStores}
+            currentStoreId={currentStoreId}
+            isEditingDefault={isEditingDefault}
+            defaultAnalyticsStoreId={defaultAnalyticsStoreId}
+            onStoreChange={(storeId, isDefault) => {
+              if (isDefault) {
+                setIsEditingDefault(true);
+                setCurrentStoreId("default");
+                setGlobalStoreId(null); // Update global context
+                navigate(`/admin/default`);
+              } else {
+                setIsEditingDefault(false);
+                setCurrentStoreId(storeId);
+                setGlobalStoreId(storeId); // Update global context
+                navigate(`/admin/${storeId}`);
+              }
+            }}
+            onSetDefaultStore={async (storeId) => {
+              try {
+                setLoading(true);
+                await setDefaultAnalyticsStore(storeId);
+                setDefaultAnalyticsStoreId(storeId);
+                
+                // Update global store context after setting default
+                refreshStoreInfo();
+
+                // Show success message
+                alert(`Default analytics store set successfully!`);
+
+                // Refresh the list of stores to update the UI
+                const stores = await getAllStores();
+                setAvailableStores(stores);
+              } catch (error) {
+                console.error("Error setting default analytics store:", error);
+                alert(
+                  `Failed to set default analytics store: ${
+                    error instanceof Error ? error.message : "Unknown error"
+                  }`
+                );
+              } finally {
+                setLoading(false);
+              }
+            }}
+            onRemoveDefaultStore={async () => {
+              try {
+                if (!confirm("Are you sure you want to remove the current default analytics store?")) {
+                  return;
+                }
+                
+                setLoading(true);
+                await removeDefaultAnalyticsStore();
+                setDefaultAnalyticsStoreId("");
+                
+                // Update global store context after removing default
+                refreshStoreInfo();
+
+                // Show success message
+                alert("Default analytics store removed successfully!");
+
+                // Refresh the list of stores to update the UI
+                const stores = await getAllStores();
+                setAvailableStores(stores);
+              } catch (error) {
+                console.error("Error removing default analytics store:", error);
+                alert(
+                  `Failed to remove default analytics store: ${
+                    error instanceof Error ? error.message : "Unknown error"
+                  }`
+                );
+              } finally {
+                setLoading(false);
+              }
+            }}
+          />
         </div>
       </div>
 
@@ -987,330 +1267,37 @@ const AdminPage = () => {
         </div>
       )}
 
-      {/* Monthly Data Tab */}
+      {/* Monthly Tab */}
       {activeTab === "monthly" && (
-        <div className="tab-content bg-white shadow rounded-lg p-4 md:p-6">
-          <div className="section-header mb-6">
-            <h2 className="text-xl font-bold text-gray-800">Monthly Data</h2>
-            <p className="text-gray-600 text-sm">
-              View and edit data for an entire month
-            </p>
-          </div>
-
-          <div className="month-select mb-6 flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Month
-              </label>
-              <select
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              >
-                {months.map((month) => (
-                  <option key={month} value={month}>
-                    {getMonthName(month)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Year
-              </label>
-              <select
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {monthData && (
-            <div className="month-data">
-              <h3 className="text-lg font-semibold mb-4">
-                Monthly Totals for {getMonthName(selectedMonth)} {selectedYear}
-              </h3>
-
-              <div className="metrics-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                {GRAPHS.map((metric, index) => (
-                  <div
-                    key={metric}
-                    className="metric-card p-4 border border-gray-200 rounded-lg hover:shadow-md transition-all cursor-pointer"
-                    onClick={() => openModal("month", metric)}
-                  >
-                    <h3 className="text-lg font-medium text-gray-800 capitalize">
-                      {GRAPH_LABELS[index]}
-                    </h3>
-                    <p className="text-2xl font-bold text-blue-600 mt-2">
-                      {formatNumberWithCommas(monthData.totals[metric] || 0)}
-                    </p>
-                    <div className="text-right mt-3">
-                      <button className="text-sm text-blue-500 hover:text-blue-700">
-                        Edit Monthly Total
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* View Mode Switcher */}
-              <div className="view-mode-switcher mb-4 flex items-center justify-between">
-                <div className="text-sm font-medium text-gray-700">
-                  View Mode:
-                </div>
-                <div className="inline-flex rounded-md shadow-sm" role="group">
-                  <button
-                    type="button"
-                    className={`px-4 py-2 text-sm font-medium border ${
-                      monthlyViewMode === "bulk"
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                    } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-blue-500 focus:text-blue-700`}
-                    onClick={() => setMonthlyViewMode("bulk")}
-                  >
-                    Bulk Distribution
-                  </button>
-                  <button
-                    type="button"
-                    className={`px-4 py-2 text-sm font-medium border ${
-                      monthlyViewMode === "breakdown"
-                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                        : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-                    } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-blue-500 focus:text-blue-700`}
-                    onClick={() => setMonthlyViewMode("breakdown")}
-                  >
-                    Daily Breakdown
-                  </button>
-                </div>
-              </div>
-
-              {monthlyViewMode === "bulk" ? (
-                <div className="bulk-distribution-view mt-8">
-                  <h3 className="text-lg font-semibold mb-4">
-                    Bulk Distribution
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    {isCurrentMonth
-                      ? `Enter the total value for ${getMonthName(
-                          selectedMonth
-                        )} ${selectedYear} (first ${currentDayOfMonth} days only). This value will be distributed evenly across all days that have passed so far.`
-                      : `Enter the total value for ${getMonthName(
-                          selectedMonth
-                        )} ${selectedYear}. This value will be distributed evenly across all days of the month.`}
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Select Metric
-                      </label>
-                      <select
-                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                        value={selectedMetric}
-                        onChange={(e) => setSelectedMetric(e.target.value)}
-                      >
-                        <option value="" disabled>
-                          Select a metric
-                        </option>
-                        {GRAPHS.map((metric, index) => (
-                          <option key={metric} value={metric}>
-                            {GRAPH_LABELS[index]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Total Value
-                      </label>
-                      <div className="flex">
-                        <input
-                          type="number"
-                          className="flex-1 p-2 border border-gray-300 rounded-l-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          value={bulkMonthValue}
-                          onChange={(e) => setBulkMonthValue(e.target.value)}
-                          placeholder="Enter total value"
-                          min="0"
-                          step="0.01"
-                        />
-                        <button
-                          className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                          onClick={() => {
-                            if (selectedMetric)
-                              openModal("month", selectedMetric);
-                          }}
-                          disabled={!selectedMetric}
-                        >
-                          Distribute
-                        </button>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        This will evenly distribute the total across{" "}
-                        {isCurrentMonth
-                          ? `only the first ${currentDayOfMonth} days`
-                          : "all days"}{" "}
-                        in {getMonthName(selectedMonth)}.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="daily-breakdown mt-8">
-                  <h3 className="text-lg font-semibold mb-4">
-                    Daily Breakdown
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Click on any value in the table to edit it directly.
-                  </p>
-
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th
-                            scope="col"
-                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            Date
-                          </th>
-                          {GRAPH_LABELS.map((label) => (
-                            <th
-                              key={label}
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                            >
-                              {label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {Object.entries(monthData.days).map(
-                          ([day, metrics]) => (
-                            <tr key={day} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {format(new Date(day), "MMM d, yyyy")}
-                              </td>
-                              {GRAPHS.map((metric) => (
-                                <td
-                                  key={`${day}-${metric}`}
-                                  className="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
-                                >
-                                  {editingDay === day &&
-                                  editingMetric === metric ? (
-                                    <div className="flex items-center space-x-2">
-                                      <input
-                                        type="number"
-                                        className="w-24 p-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        value={dayValue}
-                                        onChange={(e) =>
-                                          setDayValue(e.target.value)
-                                        }
-                                        autoFocus
-                                      />
-                                      <button
-                                        className="p-1 text-green-600 hover:text-green-800"
-                                        onClick={saveDayEdit}
-                                        title="Save"
-                                      >
-                                        <svg
-                                          className="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                          xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M5 13l4 4L19 7"
-                                          />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        className="p-1 text-red-600 hover:text-red-800"
-                                        onClick={() => {
-                                          setEditingDay(null);
-                                          setEditingMetric(null);
-                                        }}
-                                        title="Cancel"
-                                      >
-                                        <svg
-                                          className="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                          xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M6 18L18 6M6 6l12 12"
-                                          />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div
-                                      className="flex items-center group"
-                                      onClick={() =>
-                                        handleDayEdit(
-                                          day,
-                                          metric,
-                                          metrics[metric] || 0
-                                        )
-                                      }
-                                    >
-                                      <span className="cursor-pointer">
-                                        {formatNumberWithCommas(
-                                          metrics[metric] || 0
-                                        )}
-                                      </span>
-                                      <button
-                                        className="ml-2 p-1 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="Edit"
-                                      >
-                                        <svg
-                                          className="w-3.5 h-3.5"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                          xmlns="http://www.w3.org/2000/svg"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                                          />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  )}
-                                </td>
-                              ))}
-                            </tr>
-                          )
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <MonthlyDataTab
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          selectedYear={selectedYear}
+          setSelectedYear={setSelectedYear}
+          monthData={monthData}
+          monthlyViewMode={monthlyViewMode}
+          setMonthlyViewMode={setMonthlyViewMode}
+          bulkMonthValue={bulkMonthValue}
+          setBulkMonthValue={setBulkMonthValue}
+          selectedMetric={selectedMetric}
+          setSelectedMetric={setSelectedMetric}
+          isCurrentMonth={isCurrentMonth}
+          currentDayOfMonth={currentDayOfMonth}
+          years={years}
+          months={months}
+          graphs={GRAPHS}
+          graphLabels={GRAPH_LABELS}
+          formatNumberWithCommas={formatNumberWithCommas}
+          getMonthName={getMonthName}
+          openModal={openModal}
+          handleDayEdit={handleDayEdit}
+          editingDay={editingDay}
+          editingMetric={editingMetric}
+          dayValue={dayValue}
+          setDayValue={setDayValue}
+          saveDayEdit={saveDayEdit}
+          handleSaveAllPendingEdits={handleSaveAllPendingEdits}
+        />
       )}
 
       {/* Settings Tab */}
@@ -1385,6 +1372,25 @@ const AdminPage = () => {
               <p>Loading store settings...</p>
             </div>
           )}
+
+          <div className="settings-section">
+            <h2>Store Settings</h2>
+            <div className="store-image-section">
+              <div className="image-preview">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Store preview" />
+                ) : (
+                  <div className="placeholder">No image selected</div>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
+              <button onClick={handleImageUpload}>Upload Image</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1412,8 +1418,8 @@ const AdminPage = () => {
                     .toUpperCase()}`}
               </h3>
               <button
-                className="text-gray-500 hover:text-gray-700"
                 onClick={closeModal}
+                className="text-gray-500 hover:text-gray-700 focus:outline-none"
               >
                 <XMarkIcon className="size-5" />
               </button>
@@ -1439,18 +1445,62 @@ const AdminPage = () => {
                         )} ${selectedYear}. This value will be distributed evenly across all days of the month.`}
                   </p>
 
-                  <div className="form-group">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Total Value
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                      value={bulkMonthValue}
-                      onChange={(e) => setBulkMonthValue(e.target.value)}
-                      min="0"
-                      step="0.01"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Select Metric
+                      </label>
+                      <select
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        value={selectedMetric}
+                        onChange={(e) => setSelectedMetric(e.target.value)}
+                      >
+                        <option value="" disabled>
+                          Select a metric
+                        </option>
+                        {GRAPHS.map((metric, index) => (
+                          <option key={metric} value={metric}>
+                            {GRAPH_LABELS[index]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Total Value
+                      </label>
+                      <div className="flex">
+                        <input
+                          type="number"
+                          className="flex-1 p-2 border border-gray-300 rounded-l-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                          value={bulkMonthValue}
+                          onChange={(e) => setBulkMonthValue(e.target.value)}
+                          placeholder="Enter total value"
+                          min="0"
+                          step="0.01"
+                        />
+                        <button
+                          className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          onClick={() =>
+                            modalType === "day"
+                              ? saveDayData()
+                              : saveMonthData()
+                          }
+                          disabled={!selectedMetric}
+                        >
+                          {modalType === "day" ? "Save" : "Distribute"}
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {modalType === "month" &&
+                          `This will evenly distribute the total across ${
+                            isCurrentMonth
+                              ? `only the first ${currentDayOfMonth} days`
+                              : "all days"
+                          } in ${getMonthName(selectedMonth)}.`}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1482,7 +1532,7 @@ const AdminPage = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {timeLabels.map((time, index) => (
+                        {timeLabelsRef.current.map((time, index) => (
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                               {time}
@@ -1492,14 +1542,9 @@ const AdminPage = () => {
                                 type="number"
                                 className="w-full p-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={editableHourlyData[index] || 0}
-                                onChange={(e) => {
-                                  const newValue = parseFloat(e.target.value);
-                                  const newData = [...editableHourlyData];
-                                  newData[index] = isNaN(newValue)
-                                    ? 0
-                                    : newValue;
-                                  setEditableHourlyData(newData);
-                                }}
+                                onChange={(e) =>
+                                  handleHourlyDataChange(index, e.target.value)
+                                }
                                 min="0"
                                 step="0.01"
                               />
@@ -1524,55 +1569,12 @@ const AdminPage = () => {
               <button
                 className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
                 onClick={() => {
-                  if (modalType === "day") saveDailyValue();
+                  if (modalType === "day") saveDayData();
                   else if (modalType === "hour") saveHourlyData();
-                  else if (modalType === "month") saveMonthlyData();
+                  else if (modalType === "month") saveMonthData();
                 }}
               >
                 Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Store Modal */}
-      {showNewStoreModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Create New Store</h2>
-            <div className="mb-4">
-              <label
-                htmlFor="new-store-name"
-                className="block text-sm font-medium text-gray-700 mb-1"
-              >
-                Store Name
-              </label>
-              <input
-                id="new-store-name"
-                type="text"
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={newStoreName}
-                onChange={(e) => setNewStoreName(e.target.value)}
-                placeholder="Enter store name"
-              />
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
-                onClick={() => {
-                  setShowNewStoreModal(false);
-                  setNewStoreName("");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                onClick={handleCreateStore}
-                disabled={!newStoreName.trim()}
-              >
-                Create
               </button>
             </div>
           </div>

@@ -17,6 +17,8 @@ interface AdminContextProps {
     setConversionRateOverTime: (value: number) => void;
     average_order_value_over_time: number;
     setAverageOrderValueOverTime: (value: number) => void;
+    conversion_rate_breakdown: number;
+    setConversionRateBreakdown: (value: number) => void;
     date: string;
     setDate: (date: string) => void;
 }
@@ -30,6 +32,7 @@ export const AdminProvider = ({ children } : { children: React.ReactNode }) => {
     const [total_sales_over_time, setTotalSalesOverTime] = useState<number>(0);
     const [conversion_rate_over_time, setConversionRateOverTime] = useState<number>(0);
     const [average_order_value_over_time, setAverageOrderValueOverTime] = useState<number>(0);
+    const [conversion_rate_breakdown, setConversionRateBreakdown] = useState<number>(0);
     const [date, setDate] = useState<string>("");
     
     return (
@@ -50,6 +53,8 @@ export const AdminProvider = ({ children } : { children: React.ReactNode }) => {
         setConversionRateOverTime,
         average_order_value_over_time,
         setAverageOrderValueOverTime,
+        conversion_rate_breakdown,
+        setConversionRateBreakdown,
         date,
         setDate
         }}>

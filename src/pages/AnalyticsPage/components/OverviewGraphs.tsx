@@ -226,6 +226,7 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                   }}
                   smallGraph={true}
                   className="!h-[30px] bg-white"
+                  showTooltip={false}
                 />
               ) : (
                 <div></div>

@@ -75,6 +75,7 @@ const GraphContainerBox = ({
                 minMax={graphInfo?.minMax}
                 steps={graphInfo?.steps}
                 showLabel={graphInfo?.showLabel}
+                showTooltip={graphInfo?.showTooltip}
               />
             )) ||
             (graphInfo.type === "percent" && typeof graphData !== "number" && (

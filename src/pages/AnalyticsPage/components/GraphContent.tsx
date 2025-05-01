@@ -5,7 +5,6 @@ import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
 import { differenceInDays } from "date-fns";
 
-const conversionRateBreakdownValue = "5%";
 const conversionRateBreakdownImage = "/default-rate-breakdown.png";
 const sessionByDeviceTypeImage = "/default-device-sessions.png";
 
@@ -51,7 +50,11 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
             d.setDate(d.getDate() + 1)
           ) {
             labels.push(
-              d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
+              d.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "2-digit",
+              })
             );
           }
         }
@@ -149,7 +152,23 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                 <GraphContainerBox
                   graphInfo={generateGraphData({
                     name: "Conversion rate breakdown",
-                    value: conversionRateBreakdownValue,
+                    value:
+                      (data &&
+                        (
+                          (data?.conversion_rate_breakdown.dataset.reduce(
+                            (prev, data) =>
+                              prev +
+                              (Array.isArray(data.data)
+                                ? data.data.reduce((a, b) => a + b, 0)
+                                : data.data),
+                            0
+                          ) /
+                            data?.conversion_rate_breakdown.dataset?.length) *
+                            24 || 0
+                        )
+                          .toFixed(1)
+                          .toString() + "%") ||
+                      "",
                     type: "image",
                     dataContent: {
                       heading: "Conversion rate breakdown",
@@ -348,15 +367,19 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                 type: "percent",
                 value:
                   (data &&
-                    data?.conversion_rate_over_time.dataset
-                      .reduce(
+                    (
+                      data?.conversion_rate_over_time.dataset.reduce(
                         (prev, data) =>
                           prev +
                           (Array.isArray(data.data)
                             ? data.data.reduce((a, b) => a + b, 0)
                             : data.data),
                         0
-                      )
+                      ) /
+                      (data?.conversion_rate_over_time.dataset?.length * 24 ||
+                        0)
+                    )
+                      .toFixed(1)
                       .toString() + "%") ||
                   "",
                 dataContent: {

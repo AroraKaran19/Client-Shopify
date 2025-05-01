@@ -37,6 +37,7 @@ const MultiAxisChart = ({
   steps,
   smallGraph,
   className,
+  showTooltip=true,
   showLabel=false,
 }: {
   data: ChartData;
@@ -44,6 +45,7 @@ const MultiAxisChart = ({
   steps?: number;
   smallGraph?: boolean;
   className?: string;
+  showTooltip?: boolean;
   showLabel?: boolean;
 }) => {
   const chartData = {
@@ -54,8 +56,9 @@ const MultiAxisChart = ({
       fill: false,
       backgroundColor: "#fff",
       borderColor: "#4eb5e2",
-      tension: 0.4,
+      tension: 0.2,
       pointRadius: 0,
+      borderWidth: 2,
     })),
   };
 
@@ -79,6 +82,7 @@ const MultiAxisChart = ({
         },
       },
       tooltip: {
+        enabled: showTooltip,
         callbacks: {
           label: function (context: any) {
             let label = context.dataset.label || "";
@@ -90,7 +94,11 @@ const MultiAxisChart = ({
               }
             }
             if (context.parsed.y !== null) {
-              label += formatCurrency(context.parsed.y);
+              label += Intl.NumberFormat("en-IN", {
+                style: "currency",
+                currency: "INR",
+                maximumFractionDigits: 0,
+              }).format(context.parsed.y);
             }
             return label;
           },

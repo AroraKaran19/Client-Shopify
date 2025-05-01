@@ -29,12 +29,14 @@ const graphs = [
   "total_sales_over_time",
   "conversion_rate_over_time",
   "average_order_value_over_time",
+  "conversion_rate_breakdown"
 ];
 
 // Interfaces
 export interface Store {
   id: string;
   name: string;
+  imageUrl?: string;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: any;
@@ -49,6 +51,15 @@ function getCollectionPath(storeId?: string): string {
   
   // Otherwise use the store-specific path
   return `stores/${storeId}/graphData`;
+}
+
+// Helper function to check for Firebase quota errors
+export function isFirebaseQuotaError(error: unknown): boolean {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  return errorMessage.includes("quota") || 
+         errorMessage.includes("resource-exhausted") || 
+         errorMessage.includes("429") ||  // HTTP 429 Too Many Requests
+         errorMessage.includes("limit exceeded");
 }
 
 // Function to update store name
@@ -86,7 +97,7 @@ export async function getStoreSettings(storeId?: string) {
     } else {
       // Initialize default settings if none exist
       const defaultSettings = {
-        storeName: "My Shopify Store",
+        storeName: "My Store",
         updatedAt: new Date().toISOString()
       };
       
@@ -106,14 +117,7 @@ export async function getStoreSettings(storeId?: string) {
 export async function addDayData(
   date: string,
   value: number,
-  graph:
-    | "gross_sales"
-    | "returning_customer_rate"
-    | "orders_fulfilled"
-    | "orders"
-    | "total_sales_over_time"
-    | "conversion_rate_over_time"
-    | "average_order_value_over_time",
+  graph: GraphType,
   storeId?: string
 ) {
   try {
@@ -152,6 +156,11 @@ export async function addDayData(
   } catch (e) {
     if (e instanceof FirebaseError) {
       console.log(`Firebase Error: (${e.code})`);
+      
+      // Check for quota errors and show an alert
+      if (e.code === 'resource-exhausted' || e.message.includes('quota') || e.message.includes('429')) {
+        alert("Firebase quota exceeded. Please try again later or contact support.");
+      }
     } else {
       console.error("Error adding day data:", e);
     }
@@ -159,16 +168,19 @@ export async function addDayData(
   }
 }
 
+export type GraphType = 
+  | "gross_sales"
+  | "returning_customer_rate"
+  | "orders_fulfilled"
+  | "orders"
+  | "total_sales_over_time"
+  | "conversion_rate_over_time"
+  | "average_order_value_over_time"
+  | "conversion_rate_breakdown";
+
 export async function readDayData(
   date: string,
-  graph:
-    | "gross_sales"
-    | "returning_customer_rate"
-    | "orders_fulfilled"
-    | "orders"
-    | "total_sales_over_time"
-    | "conversion_rate_over_time"
-    | "average_order_value_over_time",
+  graph: GraphType,
   storeId?: string
 ) {
   try {
@@ -217,6 +229,7 @@ async function addData(date: string, storeId?: string) {
       total_sales_over_time: new Array(24).fill(0),
       conversion_rate_over_time: new Array(24).fill(0),
       average_order_value_over_time: new Array(24).fill(0),
+      conversion_rate_breakdown: new Array(24).fill(0),
     });
   } catch (e) {
     if (e instanceof FirebaseError) {
@@ -236,6 +249,7 @@ type dataReturnType = {
   total_sales_over_time?: { time: string; value: number }[];
   conversion_rate_over_time?: { time: string; value: number }[];
   average_order_value_over_time?: { time: string; value: number }[];
+  conversion_rate_breakdown?: { time: string; value: number }[];
 };
 
 async function getData(date: string, storeId?: string) {
@@ -304,6 +318,11 @@ export function updateDateData(date: string, data: dataReturnType, storeId?: str
   } catch (e) {
     if (e instanceof FirebaseError) {
       console.log(`Firebase Error: (${e.code})`);
+      
+      // Check for quota errors and show an alert
+      if (e.code === 'resource-exhausted' || e.message.includes('quota') || e.message.includes('429')) {
+        alert("Firebase quota exceeded. Please try again later or contact support.");
+      }
     } else {
       console.error("Error updating date data:", e);
     }
@@ -333,6 +352,7 @@ export async function fetchAllData(date1: string, date2: string, storeId?: strin
       total_sales_over_time: { dataset: [] },
       conversion_rate_over_time: { dataset: [] },
       average_order_value_over_time: { dataset: [] },
+      conversion_rate_breakdown: { dataset: [] },
     };
     if (date1 === "" || date2 === "") {
       return result;
@@ -833,6 +853,74 @@ export async function getDefaultAnalyticsStore() {
       console.log(`Firebase Error: (${e.code})`);
     } else {
       console.error("Error getting default analytics store:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to update store image
+export async function updateStoreImage(imageUrl: string, storeId: string) {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    const storeRef = doc(db, "stores", storeId);
+    await updateDoc(storeRef, {
+      imageUrl,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error updating store image:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to get store image
+export async function getStoreImage(storeId: string): Promise<string | null> {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    const storeRef = doc(db, "stores", storeId);
+    const storeSnap = await getDoc(storeRef);
+
+    if (storeSnap.exists()) {
+      return storeSnap.data().imageUrl || null;
+    }
+    return null;
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error getting store image:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to remove default analytics store
+export async function removeDefaultAnalyticsStore() {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    // Update the appSettings document to remove the default store ID
+    const docRef = doc(db, "settings", "appSettings");
+    await updateDoc(docRef, {
+      defaultAnalyticsStore: null,
+      updatedAt: new Date().toISOString()
+    });
+    
+    return { success: true };
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error removing default analytics store:", e);
     }
     throw e;
   }

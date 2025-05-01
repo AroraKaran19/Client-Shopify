@@ -26,6 +26,7 @@ export type GraphContentData = {
   minMax?: { min?: number; max?: number };
   steps?: number;
   showLabel?: boolean;
+  showTooltip?: boolean;
 };
 
 export interface GraphData {

@@ -1,35 +1,58 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import NotificationIcon from "../../assets/svg/NotificationIcon";
 import SideKickIcon from "../../assets/svg/SideKickIcon";
 import "./components/navbar.css";
 import Searchbar from "./components/Searchbar";
 import { LayoutContext } from "../../layout";
 import HamburgerIcon from "../../assets/svg/HamburgerIcon";
-import { getStoreSettings } from "../../firebase/firebase";
+import { useStore } from "../../StoreContext";
+import { useLocation } from "react-router-dom";
 
 const Navbar = () => {
+  const location = useLocation();
   const { notifications, sidebarState, setSidebarState } = useContext(LayoutContext);
   const [notificationCount, setNotificationCount] = useState(
     notifications.length
   );
-  const [storeName, setStoreName] = useState("Loading...");
+  const { storeName, currentStoreId, setCurrentStoreId, refreshStoreInfo } = useStore();
+  
+  const lastPathRef = useRef<string>("");
 
   useEffect(() => {
     setNotificationCount(notifications.length);
   }, [notifications]);
 
   useEffect(() => {
-    const fetchStoreName = async () => {
-      try {
-        const settings = await getStoreSettings();
-        setStoreName(settings.storeName);
-      } catch (error) {
-        console.error("Error fetching store name:", error);
-        setStoreName("My Store");
+    const path = location.pathname;
+    
+    if (path === lastPathRef.current) return;
+    
+    lastPathRef.current = path;
+    
+    if (path.includes('/admin/') || path.includes('/analytics/')) {
+      const pathParts = path.split('/');
+      const storeId = pathParts[pathParts.length - 1];
+      
+      if (storeId && storeId !== 'default' && storeId !== 'admin' && storeId !== 'analytics') {
+        if (storeId !== currentStoreId) {
+          setCurrentStoreId(storeId);
+        }
+      } else if (storeId === 'default' && currentStoreId !== null) {
+        setCurrentStoreId(null);
       }
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleStoreNameUpdate = () => {
+      refreshStoreInfo();
     };
     
-    fetchStoreName();
+    window.addEventListener('storeNameUpdated', handleStoreNameUpdate);
+    
+    return () => {
+      window.removeEventListener('storeNameUpdated', handleStoreNameUpdate);
+    };
   }, []);
 
   return (
@@ -66,7 +89,7 @@ const Navbar = () => {
         </button>
         <button className="user-btn flex items-center p-1 gap-1 active:shadow-[inset_0_-2px_4px_rgba(255,255,255,0.2)] hover:shadow-sm hover:shadow-white/60 active:bg-[rgb(26,26,26)] text-white/90 active:text-white/60 rounded-lg">
           <div className="user-image-container size-7 rounded-lg bg-[#25e82b] text-black flex items-center justify-center">
-            <p className="text-xs">MS</p>
+            <p className="text-xs">{storeName.split(" ").slice(0, 2).map((name) => name.charAt(0)).join("")}</p>
           </div>
           <p className="text-xs font-semibold sm:hidden">{storeName}</p>
         </button>

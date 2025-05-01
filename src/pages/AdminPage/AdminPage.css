@@ -1,0 +1,49 @@
+.store-image-section {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: white;
+}
+
+.image-preview {
+  width: 200px;
+  height: 200px;
+  margin-bottom: 15px;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-preview .placeholder {
+  color: #718096;
+  font-size: 14px;
+}
+
+.store-image-section input[type="file"] {
+  margin-bottom: 15px;
+  width: 100%;
+}
+
+.store-image-section button {
+  background-color: #4299e1;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.store-image-section button:hover {
+  background-color: #3182ce;
+} 
