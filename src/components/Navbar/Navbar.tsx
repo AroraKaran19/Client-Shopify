@@ -45,6 +45,7 @@ const Navbar = () => {
 
   useEffect(() => {
     const handleStoreNameUpdate = () => {
+      console.log("Navbar: Received storeNameUpdated event, refreshing store info");
       refreshStoreInfo();
     };
     
@@ -53,7 +54,7 @@ const Navbar = () => {
     return () => {
       window.removeEventListener('storeNameUpdated', handleStoreNameUpdate);
     };
-  }, []);
+  }, [refreshStoreInfo]);
 
   return (
     <div className="navbar w-full flex gap-2 items-center h-[56px] bg-[#1a1a1a] py-2 sticky top-0 z-[500]">

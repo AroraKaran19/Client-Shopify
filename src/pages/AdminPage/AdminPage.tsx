@@ -3,16 +3,15 @@ import {
   addDayData,
   fetchData,
   readDayData,
-  updateDateData,
   getStoreSettings,
   updateStoreName,
   getAllStores,
   getStoreById,
   setDefaultAnalyticsStore,
   getDefaultAnalyticsStore,
-  updateStoreImage,
   removeDefaultAnalyticsStore,
   GraphType,
+  updateDailyTotal,
 } from "@/firebase/firebase";
 import {
   format,
@@ -26,11 +25,9 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "@/StoreContext";
 
-// Import the StoreSelector component
 import StoreSelector from "./components/StoreSelector";
 import MonthlyDataTab from "./components/MonthlyDataTab";
 
-// Constants
 const GRAPHS = [
   "gross_sales",
   "returning_customer_rate",
@@ -85,42 +82,33 @@ interface MonthData {
   };
 }
 
-// Type for each tab in the admin interface
 type TabType = "daily" | "monthly" | "settings";
 
-// AdminPage Component
 const AdminPage = () => {
-  // Get store name from URL parameter
   const { storeId } = useParams<{ storeId?: string }>();
   const navigate = useNavigate();
 
-  // Get store context with renamed function to avoid conflicts
   const { setCurrentStoreId: setGlobalStoreId, refreshStoreInfo } = useStore();
 
-  // Store management states
   const [availableStores, setAvailableStores] = useState<
     { id: string; name: string }[]
   >([]);
   const [currentStoreId, setCurrentStoreId] = useState<string>("");
   const [isEditingDefault, setIsEditingDefault] = useState<boolean>(false);
 
-  // State for tab navigation
   const [activeTab, setActiveTab] = useState<TabType>("daily");
 
-  // Common states
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedMetric, setSelectedMetric] = useState<string>("");
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [modalType, setModalType] = useState<"day" | "hour" | "month">("day");
 
-  // Daily data states
   const [date, setDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [entryMethod, setEntryMethod] = useState<"day" | "hour">("day");
   const [dayData, setDayData] = useState<DayData>({});
   const [hourlyData, setHourlyData] = useState<DateData | null>(null);
   const [editableHourlyData, setEditableHourlyData] = useState<number[]>([]);
 
-  // Monthly data states
   const [selectedMonth, setSelectedMonth] = useState<number>(
     getMonth(new Date())
   );
@@ -131,16 +119,13 @@ const AdminPage = () => {
     "breakdown"
   );
 
-  // Date calculations
   const today = new Date();
-  const currentMonth = today.getMonth() + 1; // 1-12
+  const currentMonth = today.getMonth() + 1;
   const currentYear = today.getFullYear();
   const currentDayOfMonth = today.getDate();
   const isCurrentMonth =
     selectedMonth === currentMonth && selectedYear === currentYear;
 
-  // For current month, only include days up to today
-  // Settings states
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(
     null
   );
@@ -148,12 +133,11 @@ const AdminPage = () => {
   const [defaultAnalyticsStoreId, setDefaultAnalyticsStoreId] =
     useState<string>("");
 
-  // Create a stable reference to timeLabels
   const timeLabelsRef = useRef(
     Array.from({ length: 24 }, (_, i) => {
-      const hour = i % 12 === 0 ? 12 : i % 12;
-      const period = i < 12 ? "AM" : "PM";
-      return `${hour}:00 ${period}`;
+    const hour = i % 12 === 0 ? 12 : i % 12;
+    const period = i < 12 ? "AM" : "PM";
+    return `${hour}:00 ${period}`;
     })
   );
 
@@ -164,11 +148,6 @@ const AdminPage = () => {
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [editingMetric, setEditingMetric] = useState<string | null>(null);
   const [dayValue, setDayValue] = useState<string>("");
-
-  // New image states
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-
   // Function to handle tab change
   const handleTabChange = (tab: TabType) => {
     if (tab !== activeTab) {
@@ -194,17 +173,15 @@ const AdminPage = () => {
           const settings = await getStoreSettings(currentStoreId || undefined);
           setStoreSettings(settings as StoreSettings);
           setNewStoreName(settings.storeName);
-          
+
           // Update the global store context
           setGlobalStoreId(currentStoreId);
         } else {
-          // Set default values for the default analytics page
-          setStoreSettings({
-            storeName: "Default Analytics Page",
-            updatedAt: new Date().toISOString(),
-          });
-          setNewStoreName("Default Analytics Page");
-          
+          // Check if we should load real settings for default store
+          const settings = await getStoreSettings("default");
+          setStoreSettings(settings as StoreSettings);
+          setNewStoreName(settings.storeName);
+
           // Update the global store context
           setGlobalStoreId(null);
         }
@@ -301,9 +278,9 @@ const AdminPage = () => {
         // Fetch all metrics in parallel for better performance
         const fetchPromises = GRAPHS.map((metric) =>
           readDayData(
-            date,
+          date,
             metric,
-            isEditingDefault ? "default" : currentStoreId || undefined
+          isEditingDefault ? "default" : currentStoreId || undefined
           ).then((result) => {
             dailyTotals[metric] = result || 0;
           })
@@ -332,14 +309,14 @@ const AdminPage = () => {
   const fetchHourlyData = async () => {
     if (!date) return;
 
-    setLoading(true);
+      setLoading(true);
 
     try {
       // Fetch complete document from Firebase
       const rawData = await fetchData(
-        date,
-        isEditingDefault ? "default" : currentStoreId || undefined
-      );
+          date,
+          isEditingDefault ? "default" : currentStoreId || undefined
+        );
 
       if (!rawData) {
         // If no data, create empty time-value arrays for all metrics
@@ -348,7 +325,7 @@ const AdminPage = () => {
         GRAPHS.forEach((metric) => {
           emptyHourlyData[metric as keyof DateData] = timeLabelsRef.current.map(
             (time) => ({
-              time,
+            time,
               value: 0,
             })
           );
@@ -454,27 +431,22 @@ const AdminPage = () => {
         const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
         const monthEnd = endOfMonth(monthStart);
 
-        // If we're in the current month, only get days up to today
         const effectiveEndDate = isCurrentMonth ? today : monthEnd;
 
-        // Get all days in the month (or up to today if current month)
         const daysInMonth = eachDayOfInterval({
           start: monthStart,
           end: effectiveEndDate,
         });
 
-        // Initialize month data structure
         const newMonthData: MonthData = {
           days: {},
           totals: {},
         };
 
-        // Initialize totals with zeros
         GRAPHS.forEach((metric) => {
           newMonthData.totals[metric] = 0;
         });
 
-        // Fetch data for each day and aggregate
         for (const day of daysInMonth) {
           const dateStr = format(day, "yyyy-MM-dd");
           const dayData = await fetchData(
@@ -522,23 +494,18 @@ const AdminPage = () => {
     activeTab,
   ]);
 
-  // Modal handling
   const openModal = (type: "day" | "hour" | "month", metric: string) => {
-    // Set these states first to prevent UI flickers
     setSelectedMetric(metric);
     setModalType(type);
 
-    // Only fetch hourly data if we're opening the hourly modal and don't have data yet
     if (
       type === "hour" &&
       (!hourlyData || !hourlyData[metric as keyof DateData]?.length)
     ) {
       setLoading(true);
 
-      // Fetch the data, then open modal
       fetchHourlyData()
         .then(() => {
-          // Initialize editable data based on the fetched hourly data
           if (hourlyData && hourlyData[metric as keyof DateData]?.length > 0) {
             setEditableHourlyData(
               hourlyData[metric as keyof DateData].map((item) => item.value)
@@ -547,20 +514,17 @@ const AdminPage = () => {
             setEditableHourlyData(new Array(24).fill(0));
           }
 
-          // Now open the modal
-          setModalOpen(true);
+    setModalOpen(true);
         })
         .catch((error) => {
           console.error("Error loading hourly data for modal:", error);
-          // Open modal with empty data in case of error
           setEditableHourlyData(new Array(24).fill(0));
           setModalOpen(true);
         });
 
-      return; // Don't open modal yet - wait for data
+      return;
     }
 
-    // Prepare editable data for the modal
     if (type === "hour" && hourlyData?.[metric as keyof DateData]) {
       setEditableHourlyData(
         hourlyData[metric as keyof DateData].map((item) => item.value)
@@ -572,29 +536,25 @@ const AdminPage = () => {
       const value = monthData.totals[metric] || 0;
       setBulkMonthValue(value.toString());
     } else if (type === "hour") {
-      // Fallback for hourly view if data not available
       setEditableHourlyData(new Array(24).fill(0));
     }
 
-    // Open the modal
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
 
-    // Restore background scrolling
     const main = document.querySelector("main");
     if (main) {
       main.style.overflowY = "auto";
     }
   };
 
-  // Save daily data (single value)
   const saveDailyValue = async () => {
     if (!selectedMetric || !date) return;
 
-    const value = parseInt(bulkMonthValue);
+    const value = Math.round(parseFloat(bulkMonthValue));
     if (isNaN(value)) return;
 
     try {
@@ -606,7 +566,6 @@ const AdminPage = () => {
         isEditingDefault ? "default" : currentStoreId || undefined
       );
 
-      // Update local state
       setDayData((prev) => ({
         ...prev,
         [selectedMetric]: value,
@@ -620,85 +579,17 @@ const AdminPage = () => {
     }
   };
 
-  // Save hourly data (24 values)
-  const saveHourlyData = async () => {
-    if (!selectedMetric || !date) {
-      console.error("Cannot save hourly data: missing metric or date");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // Step 1: Get the current data to ensure we don't overwrite other metrics
-      const currentData =
-        (await fetchData(
-          date,
-          isEditingDefault ? "default" : currentStoreId || undefined
-        )) || {};
-
-      // Step 2: Create a complete data object for saving
-      const dataToSave = { ...currentData };
-
-      // Step 3: Update the selected metric with our edited values
-      // Make sure we have exactly 24 values
-      const normalizedValues = [...editableHourlyData];
-      while (normalizedValues.length < 24) normalizedValues.push(0);
-      dataToSave[selectedMetric] = normalizedValues.slice(0, 24);
-
-      // Step 4: Save to Firebase
-      await updateDateData(
-        date,
-        dataToSave,
-        isEditingDefault ? "default" : currentStoreId || undefined
-      );
-
-      // Step 5: Update local state
-      // Update hourly data display
-      if (hourlyData) {
-        const updatedHourlyData = { ...hourlyData };
-        updatedHourlyData[selectedMetric as keyof DateData] =
-          timeLabelsRef.current.map((time, index) => ({
-            time,
-            value: normalizedValues[index] || 0,
-          }));
-        setHourlyData(updatedHourlyData);
-      }
-
-      // Update day total for this metric
-      const dayTotal = normalizedValues.reduce(
-        (sum, val) => sum + (val || 0),
-        0
-      );
-      setDayData((prev) => ({
-        ...prev,
-        [selectedMetric]: dayTotal,
-      }));
-
-      // Success - close modal and finish
-      closeModal();
-    } catch (error) {
-      console.error("Error saving hourly data:", error);
-      alert("Failed to save hourly data. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Save monthly data (distribute value across days that have passed)
   const saveMonthlyData = async () => {
     if (!selectedMetric || !monthData) return;
 
-    const totalValue = parseFloat(bulkMonthValue);
+    const totalValue = Math.round(parseFloat(bulkMonthValue));
     if (isNaN(totalValue)) return;
 
     try {
       setLoading(true);
 
-      // Get days in the month
       const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
 
-      // If we're in the current month, only distribute to days up to today
       const effectiveEndDate = isCurrentMonth ? today : endOfMonth(monthStart);
 
       const daysInMonth = eachDayOfInterval({
@@ -706,23 +597,16 @@ const AdminPage = () => {
         end: effectiveEndDate,
       });
 
-      // Calculate value per day based on actual days to distribute to
-      // Round to 2 decimal places to avoid floating point errors
-      const valuePerDay = parseFloat((totalValue / daysInMonth.length).toFixed(2));
-      
-      // Handle any rounding errors by adding the difference to the first day
-      const roundingError = totalValue - (valuePerDay * daysInMonth.length);
-      
-      // Update each day
+      const valuePerDay = Math.round(totalValue / daysInMonth.length);
+      let remainingValue = totalValue;
+
       for (let i = 0; i < daysInMonth.length; i++) {
-        const day = daysInMonth[i];
-        const dateStr = format(day, "yyyy-MM-dd");
-        
-        // Add any rounding difference to the first day to ensure total is exact
-        const dayValue = i === 0 
-          ? parseFloat((valuePerDay + roundingError).toFixed(2)) 
-          : valuePerDay;
-          
+        const dateStr = format(daysInMonth[i], "yyyy-MM-dd");
+
+        const dayValue =
+          i === daysInMonth.length - 1 ? remainingValue : valuePerDay;
+        remainingValue -= dayValue;
+
         await addDayData(
           dateStr,
           dayValue,
@@ -731,25 +615,22 @@ const AdminPage = () => {
         );
       }
 
-      // Update local state
       const updatedMonthData = { ...monthData };
 
-      // Update day values
       daysInMonth.forEach((day, index) => {
         const dateStr = format(day, "yyyy-MM-dd");
         if (!updatedMonthData.days[dateStr]) {
           updatedMonthData.days[dateStr] = {};
         }
-        
-        // Add any rounding difference to the first day
-        const dayValue = index === 0 
-          ? parseFloat((valuePerDay + roundingError).toFixed(2)) 
-          : valuePerDay;
-          
+
+        const dayValue =
+          index === daysInMonth.length - 1
+            ? remainingValue + valuePerDay
+            : valuePerDay;
+
         updatedMonthData.days[dateStr][selectedMetric] = dayValue;
       });
 
-      // Update total with original value to maintain accuracy
       updatedMonthData.totals[selectedMetric] = totalValue;
 
       setMonthData(updatedMonthData);
@@ -758,21 +639,11 @@ const AdminPage = () => {
     } catch (error) {
       console.error("Error saving monthly data:", error);
       setLoading(false);
-      
-      // Check for Firebase quota errors
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes("quota") || errorMessage.includes("resource-exhausted")) {
-        alert("Firebase quota exceeded. Please try again later or contact support.");
-      } else {
-        alert("Failed to distribute monthly data. Please try again.");
-      }
     }
   };
 
-  // Save store settings
   const saveStoreSettings = async () => {
     if (
-      isEditingDefault ||
       !storeSettings ||
       newStoreName === storeSettings.storeName ||
       !newStoreName.trim()
@@ -782,23 +653,25 @@ const AdminPage = () => {
     try {
       setLoading(true);
 
-      // Save the new store name to Firebase
-      await updateStoreName(newStoreName.trim(), currentStoreId);
+      const storeIdToUse = isEditingDefault ? "default" : currentStoreId;
+      console.log(`AdminPage: Updating store name to "${newStoreName.trim()}" for storeId: ${storeIdToUse}`);
+      
+      await updateStoreName(newStoreName.trim(), storeIdToUse);
 
-      // Update local state with new values
       setStoreSettings({
         ...storeSettings,
         storeName: newStoreName.trim(),
         updatedAt: new Date().toISOString(),
       });
-      
-      // Update global store context
+
+      // Force refresh store info in the global context
       refreshStoreInfo();
-
-      // Dispatch event to update navbar
-      window.dispatchEvent(new Event('storeNameUpdated'));
-
-      // Show success message using alert (could be replaced with a toast notification in a real app)
+      
+      // The refreshStoreInfo() call should be sufficient, but we'll also dispatch the event
+      // to ensure any other components listening for changes are updated
+      console.log("AdminPage: Dispatching storeNameUpdated event");
+      window.dispatchEvent(new Event("storeNameUpdated"));
+      
       alert(`Store name successfully updated to "${newStoreName.trim()}"`);
 
       setLoading(false);
@@ -806,7 +679,6 @@ const AdminPage = () => {
       console.error("Error updating store name:", error);
       setLoading(false);
 
-      // Show error message
       alert(
         `Failed to update store name: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -815,17 +687,18 @@ const AdminPage = () => {
     }
   };
 
-  // UI Helpers
   const formatNumberWithCommas = (num: number) => {
     if (num >= 1000000) {
-      return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+      const millions = Math.trunc(num / 1000000);
+      return millions + "M";
     }
     if (num >= 1000) {
-      return (num / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+      const thousands = Math.trunc(num / 1000);
+      return thousands + "k";
     }
-    return num.toLocaleString(undefined, {
+    return Math.trunc(num).toLocaleString(undefined, {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      maximumFractionDigits: 0,
     });
   };
 
@@ -839,32 +712,36 @@ const AdminPage = () => {
   );
   const months = Array.from({ length: 12 }, (_, i) => i);
 
-  // Function to handle individual day editing in table
   const handleDayEdit = (day: string, metric: string, currentValue: number) => {
     setEditingDay(day);
     setEditingMetric(metric);
-    setDayValue(currentValue.toString());
+    setDayValue(Math.round(currentValue).toString());
   };
 
-  // Function to save individual day edit
   const saveDayEdit = async () => {
     if (!editingDay || !editingMetric || !monthData) return;
 
-    const value = parseFloat(dayValue);
+    const value = Math.round(parseFloat(dayValue));
     if (isNaN(value)) return;
 
     try {
       setLoading(true);
 
-      // Save to Firebase
-      await addDayData(
+      try {
+        await updateDailyTotal(
         editingDay,
         value,
         editingMetric as keyof DayData,
         isEditingDefault ? "default" : currentStoreId || undefined
       );
+      } catch (saveError: unknown) {
+        console.error("Error saving day edit to Firebase:", saveError);
+        const errorMessage =
+          saveError instanceof Error ? saveError.message : "Unknown error";
+        throw new Error(`Failed to save day edit: ${errorMessage}`);
+      }
 
-      // Update local state
+      // Update local state after successful save
       const updatedMonthData = { ...monthData };
 
       // Calculate difference for the monthly total
@@ -877,7 +754,6 @@ const AdminPage = () => {
       }
       updatedMonthData.days[editingDay][editingMetric] = value;
 
-      // Update total
       updatedMonthData.totals[editingMetric] =
         (updatedMonthData.totals[editingMetric] || 0) + difference;
 
@@ -889,156 +765,130 @@ const AdminPage = () => {
     } catch (error) {
       console.error("Error saving day value:", error);
       setLoading(false);
+      alert(
+        `Failed to save changes: ${
+          error instanceof Error ? error.message : "Please try again."
+        }`
+      );
     }
   };
 
-  // Function to handle saving all pending edits
-  const handleSaveAllPendingEdits = async (pendingEdits: Record<string, { metric: string; value: number }>) => {
-    
+  const handleSaveAllPendingEdits = async (
+    pendingEdits: Record<string, { metric: string; value: number }>
+  ) => {
+    console.log(
+      "AdminPage: handleSaveAllPendingEdits called with:",
+      pendingEdits
+    );
     if (Object.keys(pendingEdits).length === 0 || !monthData) {
+      console.log("AdminPage: No pending edits to save or monthData is null");
       return;
     }
 
     try {
       setLoading(true);
-      
-      // Track successful edits to return to the child component
-      const successfulEdits: Record<string, boolean> = {};
-      
-      // Process edits one by one for better error handling
-      for (const key in pendingEdits) {
+
+      const editKeys = Object.keys(pendingEdits);
+      console.log(`AdminPage: Processing ${editKeys.length} edits`);
+
+      const errors = [];
+      for (const key of editKeys) {
+        const lastHyphenIndex = key.lastIndexOf("-");
+        const day = key.substring(0, lastHyphenIndex);
+        const metric = key.substring(lastHyphenIndex + 1);
+        const { value } = pendingEdits[key];
+
+        const numericValue =
+          typeof value === "string"
+            ? Math.round(parseFloat(value))
+            : Math.round(value);
+        if (isNaN(numericValue)) {
+          errors.push(`Invalid value for ${day}-${metric}: ${value}`);
+          continue;
+        }
+
         try {
-          const [day, metric] = key.split("-");
-          const { value } = pendingEdits[key];
-          
-          console.log(`Saving edit for ${day}, ${metric}: ${value}`);
-          
-          // Save to Firebase
-          await addDayData(
+          const result = await updateDailyTotal(
             day,
-            value,
+            numericValue,
             metric as keyof DayData,
             isEditingDefault ? "default" : currentStoreId || undefined
           );
-          
-          console.log(`Successfully saved to Firebase for ${day}, ${metric}`);
-          
-          // Mark as successful
-          successfulEdits[key] = true;
-          
-          // Update local state
+
+          console.log(
+            `AdminPage: Successfully saved ${day}-${metric} to Firebase, result:`,
+            result
+          );
+
           const updatedMonthData = { ...monthData };
-          
-          // Calculate difference for the monthly total
+
           const oldValue = updatedMonthData.days[day]?.[metric] || 0;
-          const difference = value - oldValue;
-          
-          console.log(`Updating local state, old: ${oldValue}, new: ${value}, diff: ${difference}`);
-          
-          // Update day value
+          const difference = numericValue - oldValue;
+
           if (!updatedMonthData.days[day]) {
             updatedMonthData.days[day] = {};
           }
-          updatedMonthData.days[day][metric] = value;
-          
-          // Update total
+          updatedMonthData.days[day][metric] = numericValue;
           updatedMonthData.totals[metric] =
             (updatedMonthData.totals[metric] || 0) + difference;
-            
+
           setMonthData(updatedMonthData);
         } catch (error) {
-          console.error(`Error saving edit for ${key}:`, error);
-          // Continue with other edits even if one fails
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          errors.push(`Failed to save ${day}-${metric}: ${errorMessage}`);
         }
       }
-      
+
       setLoading(false);
-      
-      // Show success message with count of successful edits
-      const successCount = Object.keys(successfulEdits).length;
-      const totalCount = Object.keys(pendingEdits).length;
-      
-      if (successCount === totalCount) {
-        alert(`All ${totalCount} changes saved successfully!`);
-      } else if (successCount > 0) {
-        alert(`Saved ${successCount} out of ${totalCount} changes.`);
+
+      if (errors.length > 0) {
+        alert(
+          `Saved ${editKeys.length - errors.length} of ${
+            editKeys.length
+          } changes. Errors: ${errors.slice(0, 3).join(", ")}${
+            errors.length > 3 ? ` and ${errors.length - 3} more` : ""
+          }`
+        );
       } else {
-        alert("Failed to save changes. Please try again.");
+        alert("All changes saved successfully");
       }
     } catch (error) {
-      console.error("Error in batch save operation:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       setLoading(false);
-      
-      // Check for Firebase quota errors
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes("quota") || errorMessage.includes("resource-exhausted")) {
-        alert("Firebase quota exceeded. Please try again later or contact support.");
-      } else {
-        alert("Failed to save changes. Please try again.");
-      }
+      alert(`Failed to save changes: ${errorMessage}`);
     }
   };
 
-  // Restore scrolling behavior when entry method is hour
   useEffect(() => {
-    const main = document.querySelector("main");
+      const main = document.querySelector("main");
 
-    // Only when switching to hourly view
     if (entryMethod === "hour") {
       if (main) {
-        // Don't set overflow to hidden, just smooth scroll to top
         main.scrollTo({ top: 0, behavior: "smooth" });
-        main.style.overflowY = "auto"; // Ensure scrolling is enabled
+        main.style.overflowY = "auto";
       }
     }
 
-    // Cleanup function to ensure we restore scrolling
     return () => {
       if (main) {
-        main.style.overflowY = "auto"; // Always ensure overflow is restored
+        main.style.overflowY = "auto";
       }
     };
   }, [entryMethod]);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleImageUpload = async () => {
-    if (!selectedImage || !currentStoreId) return;
-
-    try {
-      // Here you would typically upload the image to a storage service
-      // For now, we'll just use the preview URL as a placeholder
-      await updateStoreImage(imagePreview || "", currentStoreId);
-      console.log("Store image updated successfully");
-    } catch (error) {
-      console.error("Error uploading image:", error);
-    }
-  };
-
-  // Handle hourly data value change
   const handleHourlyDataChange = (index: number, value: string) => {
-    const numValue = parseFloat(value);
+    const numValue = Math.round(parseFloat(value));
     const newData = [...editableHourlyData];
     newData[index] = isNaN(numValue) ? 0 : numValue;
     setEditableHourlyData(newData);
   };
 
-  // Save day data wrapper for modal
   const saveDayData = () => {
     saveDailyValue();
   };
 
-  // Save monthly data wrapper for modal
   const saveMonthData = () => {
     saveMonthlyData();
   };
@@ -1058,22 +908,22 @@ const AdminPage = () => {
                 ? "Edit data displayed on the default analytics page (/analytics)"
                 : "Manage your store data and settings"}
             </p>
-          </div>
+      </div>
 
           {/* Store Selector */}
-          <StoreSelector 
+          <StoreSelector
             availableStores={availableStores}
             currentStoreId={currentStoreId}
             isEditingDefault={isEditingDefault}
             defaultAnalyticsStoreId={defaultAnalyticsStoreId}
             onStoreChange={(storeId, isDefault) => {
               if (isDefault) {
-                setIsEditingDefault(true);
-                setCurrentStoreId("default");
+                        setIsEditingDefault(true);
+                        setCurrentStoreId("default");
                 setGlobalStoreId(null); // Update global context
-                navigate(`/admin/default`);
-              } else {
-                setIsEditingDefault(false);
+                        navigate(`/admin/default`);
+                      } else {
+                        setIsEditingDefault(false);
                 setCurrentStoreId(storeId);
                 setGlobalStoreId(storeId); // Update global context
                 navigate(`/admin/${storeId}`);
@@ -1084,7 +934,7 @@ const AdminPage = () => {
                 setLoading(true);
                 await setDefaultAnalyticsStore(storeId);
                 setDefaultAnalyticsStoreId(storeId);
-                
+
                 // Update global store context after setting default
                 refreshStoreInfo();
 
@@ -1107,21 +957,20 @@ const AdminPage = () => {
             }}
             onRemoveDefaultStore={async () => {
               try {
-                if (!confirm("Are you sure you want to remove the current default analytics store?")) {
+                if (
+                  !confirm(
+                    "Are you sure you want to remove the current default analytics store?"
+                  )
+                ) {
                   return;
                 }
-                
+
                 setLoading(true);
                 await removeDefaultAnalyticsStore();
                 setDefaultAnalyticsStoreId("");
-                
-                // Update global store context after removing default
+
                 refreshStoreInfo();
-
-                // Show success message
                 alert("Default analytics store removed successfully!");
-
-                // Refresh the list of stores to update the UI
                 const stores = await getAllStores();
                 setAvailableStores(stores);
               } catch (error) {
@@ -1139,7 +988,6 @@ const AdminPage = () => {
         </div>
       </div>
 
-      {/* Loading Overlay */}
       {loading && (
         <div className="loading-overlay fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg flex items-center gap-4">
@@ -1149,7 +997,6 @@ const AdminPage = () => {
         </div>
       )}
 
-      {/* Navigation Tabs */}
       <div className="tabs flex flex-wrap md:flex-nowrap mb-6 gap-2">
         <button
           className={`tab-btn px-4 py-2 rounded-lg flex-1 font-medium transition-all ${
@@ -1199,11 +1046,11 @@ const AdminPage = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Select Date
             </label>
-            <input
-              type="date"
+          <input
+            type="date"
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => setDate(e.target.value)}
               max={format(new Date(), "yyyy-MM-dd")}
             />
           </div>
@@ -1316,8 +1163,8 @@ const AdminPage = () => {
                 <div className="form-group mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Store Name
-                  </label>
-                  <input
+          </label>
+          <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     value={newStoreName}
@@ -1328,13 +1175,13 @@ const AdminPage = () => {
                     This name will be displayed throughout your store's
                     dashboard and reports.
                   </p>
-                </div>
+      </div>
 
                 <div className="form-group mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Last Updated
                   </label>
-                  <input
+              <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded-md bg-gray-50"
                     value={new Date(storeSettings.updatedAt).toLocaleString()}
@@ -1343,10 +1190,10 @@ const AdminPage = () => {
                   <p className="text-xs text-gray-500 mt-1">
                     The timestamp when your store settings were last modified.
                   </p>
-                </div>
+            </div>
 
                 <div className="form-actions space-y-2">
-                  <button
+            <button
                     className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                     onClick={saveStoreSettings}
                     disabled={
@@ -1363,34 +1210,17 @@ const AdminPage = () => {
                     disabled={newStoreName === storeSettings.storeName}
                   >
                     Reset Changes
-                  </button>
-                </div>
+            </button>
+          </div>
               </div>
             </div>
           ) : (
             <div className="flex justify-center p-8">
               <p>Loading store settings...</p>
-            </div>
-          )}
+        </div>
+      )}
 
-          <div className="settings-section">
-            <h2>Store Settings</h2>
-            <div className="store-image-section">
-              <div className="image-preview">
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Store preview" />
-                ) : (
-                  <div className="placeholder">No image selected</div>
-                )}
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-              />
-              <button onClick={handleImageUpload}>Upload Image</button>
-            </div>
-          </div>
+          {/* Store image section removed as requested */}
         </div>
       )}
 
@@ -1467,19 +1297,19 @@ const AdminPage = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Total Value
-                      </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Total Value
+                    </label>
                       <div className="flex">
-                        <input
-                          type="number"
+                    <input
+                      type="number"
                           className="flex-1 p-2 border border-gray-300 rounded-l-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          value={bulkMonthValue}
-                          onChange={(e) => setBulkMonthValue(e.target.value)}
+                      value={bulkMonthValue}
+                      onChange={(e) => setBulkMonthValue(e.target.value)}
                           placeholder="Enter total value"
-                          min="0"
-                          step="0.01"
-                        />
+                      min="0"
+                      step="0.01"
+                    />
                         <button
                           className="px-4 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                           onClick={() =>
@@ -1489,7 +1319,7 @@ const AdminPage = () => {
                           }
                           disabled={!selectedMetric}
                         >
-                          {modalType === "day" ? "Save" : "Distribute"}
+                          Save
                         </button>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
@@ -1522,24 +1352,24 @@ const AdminPage = () => {
                             className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
                             Time
-                          </th>
+                    </th>
                           <th
                             scope="col"
                             className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                           >
                             Value
-                          </th>
-                        </tr>
-                      </thead>
+                    </th>
+                  </tr>
+                </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {timeLabelsRef.current.map((time, index) => (
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                               {time}
-                            </td>
+                          </td>
                             <td className="px-4 py-2 whitespace-nowrap">
-                              <input
-                                type="number"
+                            <input
+                              type="number"
                                 className="w-full p-1 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={editableHourlyData[index] || 0}
                                 onChange={(e) =>
@@ -1547,34 +1377,24 @@ const AdminPage = () => {
                                 }
                                 min="0"
                                 step="0.01"
-                              />
-                            </td>
-                          </tr>
+                            />
+                          </td>
+                        </tr>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                </tbody>
+              </table>
+            </div>
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
             <div className="modal-footer flex justify-end gap-2 p-4 border-t">
-              <button
+            <button
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
                 onClick={closeModal}
               >
                 Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-                onClick={() => {
-                  if (modalType === "day") saveDayData();
-                  else if (modalType === "hour") saveHourlyData();
-                  else if (modalType === "month") saveMonthData();
-                }}
-              >
-                Save Changes
               </button>
             </div>
           </div>

@@ -1,7 +1,5 @@
 import { format } from "date-fns";
-import { useEffect, useState } from "react";
 import XMarkIcon from "@/assets/svg/XMarkIcon";
-import { GraphType } from "@/firebase/firebase";
 
 interface DataEntryModalProps {
   isOpen: boolean;
@@ -36,8 +34,6 @@ const DataEntryModal = ({
   selectedMetric,
   date,
   timeLabels,
-  dayData,
-  hourlyData,
   editableHourlyData,
   setEditableHourlyData,
   bulkMonthValue,
@@ -162,7 +158,7 @@ const DataEntryModal = ({
                       onClick={() => modalType === "day" ? saveDayData() : saveMonthData()}
                       disabled={!selectedMetric}
                     >
-                      {modalType === "day" ? "Save" : "Distribute"}
+                      Save
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -234,16 +230,6 @@ const DataEntryModal = ({
             onClick={onClose}
           >
             Cancel
-          </button>
-          <button
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-            onClick={() => {
-              if (modalType === "day") saveDayData();
-              else if (modalType === "hour") saveHourlyData();
-              else if (modalType === "month") saveMonthData();
-            }}
-          >
-            Save Changes
           </button>
         </div>
       </div>

@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { useState } from "react";
 
 interface DailyDataTabProps {
   date: string;

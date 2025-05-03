@@ -39,19 +39,8 @@ interface MonthlyDataTabProps {
   dayValue: string;
   setDayValue: (value: string) => void;
   saveDayEdit: () => void;
-  handleSaveAllPendingEdits?: (pendingEdits: Record<string, { metric: string; value: number }>) => Promise<void>;
-  loading?: boolean;
-  setLoading?: (loading: boolean) => void;
+  handleSaveAllPendingEdits?: (pendingEdits: Record<string, { metric: string; value: number }>) => Promise<boolean | void>;
 }
-
-// Helper function to check for Firebase quota errors
-const isFirebaseQuotaError = (error: unknown): boolean => {
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  return errorMessage.includes("quota") || 
-         errorMessage.includes("resource-exhausted") || 
-         errorMessage.includes("429") ||  // HTTP 429 Too Many Requests
-         errorMessage.includes("limit exceeded");
-};
 
 const MonthlyDataTab = ({
   selectedMonth,
@@ -79,20 +68,12 @@ const MonthlyDataTab = ({
   editingMetric,
   dayValue,
   setDayValue,
-  handleSaveAllPendingEdits,
-  setLoading
+  handleSaveAllPendingEdits
 }: MonthlyDataTabProps) => {
-  // Local state for unsaved changes tracking
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
-  const [pendingEdits, setPendingEdits] = useState<Record<string, {
-    metric: string;
-    value: number;
-    originalValue: number;
-  }>>({});
-  
-  // Local loading state for the button
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pendingEdits, setPendingEdits] = useState<{
+    [key: string]: { metric: string; value: number; originalValue: number };
+  }>({});
   // Fix the ref definition to use React.RefCallback
   const inputRefs = useRef<{[key: string]: HTMLInputElement | null}>({});
   
@@ -155,25 +136,17 @@ const MonthlyDataTab = ({
   
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, day: string, metric: string) => {
-    // Handle key navigation in the table
     if (e.key === 'Tab') {
       e.preventDefault();
       
-      // Find current position in the table
-      const cellKeys = Object.keys(getValidDays()).flatMap(day => 
-        graphs.map(metric => `${day}-${metric}`)
-      );
-      
-      const currentKey = `${day}-${metric}`;
-      const currentIndex = cellKeys.indexOf(currentKey);
-      
-      // Save current value to pending edits if changed
-      const currentValue = parseFloat(dayValue);
+      // Save current cell value to pendingEdits but DON'T send to backend
+      const currentValue = Math.round(parseFloat(dayValue));
       if (!isNaN(currentValue) && editingDay && editingMetric) {
         const key = `${editingDay}-${editingMetric}`;
         const originalValue = pendingEdits[key]?.originalValue || 
                             (monthData?.days[editingDay]?.[editingMetric] || 0);
-                            
+        
+        // Only track as pending edit if the value has changed
         if (currentValue !== originalValue) {
           setPendingEdits(prev => ({
             ...prev,
@@ -187,39 +160,55 @@ const MonthlyDataTab = ({
         }
       }
       
-      // Determine next cell based on shift key (backwards or forwards)
-      let nextIndex;
+      // Get all the days and metrics to determine next/previous cell
+      const days = Object.keys(monthData?.days || {}).sort();
+      const dayIndex = days.indexOf(day);
+      const metricIndex = graphs.indexOf(metric);
+      
+      // Calculate next cell indices
+      let nextDayIndex = dayIndex;
+      let nextMetricIndex = metricIndex;
+      
       if (e.shiftKey) {
-        // Move backwards
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : cellKeys.length - 1;
+        // Tab + Shift goes backwards
+        if (metricIndex > 0) {
+          nextMetricIndex = metricIndex - 1;
+        } else if (dayIndex > 0) {
+          nextDayIndex = dayIndex - 1;
+          nextMetricIndex = graphs.length - 1;
+        }
       } else {
-        // Move forwards
-        nextIndex = currentIndex < cellKeys.length - 1 ? currentIndex + 1 : 0;
+        // Tab goes forwards
+        if (metricIndex < graphs.length - 1) {
+          nextMetricIndex = metricIndex + 1;
+        } else if (dayIndex < days.length - 1) {
+          nextDayIndex = dayIndex + 1;
+          nextMetricIndex = 0;
+        }
       }
       
-      // Get next cell coordinates
-      const nextKey = cellKeys[nextIndex];
-      const [nextDay, nextMetric] = nextKey.split('-');
-      
-      // Move to next cell
-      handleDayEdit(nextDay, nextMetric, monthData?.days[nextDay]?.[nextMetric] || 0);
-      
-      // Focus the next input after a short delay to allow React to render
-      setTimeout(() => {
-        const input = inputRefs.current[nextKey];
-        if (input) input.focus();
-      }, 10);
-    } 
-    else if (e.key === 'Enter') {
+      // If we found a valid next cell
+      if (nextDayIndex >= 0 && nextDayIndex < days.length && 
+          nextMetricIndex >= 0 && nextMetricIndex < graphs.length) {
+        const nextDay = days[nextDayIndex];
+        const nextMetric = graphs[nextMetricIndex];
+        
+        // Move to the next cell without saving to backend
+        const nextValue = Number(pendingEdits[`${nextDay}-${nextMetric}`]?.value) || 
+                       Number(monthData?.days[nextDay]?.[nextMetric]) || 0;
+                       
+        handleDayEdit(nextDay, nextMetric, nextValue);
+      }
+    } else if (e.key === 'Enter') {
       e.preventDefault();
-      
-      // Save current value to pending edits
-      const currentValue = parseFloat(dayValue);
+      // On Enter, add to pending edits but don't save to backend yet
+      const currentValue = Math.round(parseFloat(dayValue));
       if (!isNaN(currentValue) && editingDay && editingMetric) {
         const key = `${editingDay}-${editingMetric}`;
         const originalValue = pendingEdits[key]?.originalValue || 
-                             (monthData?.days[editingDay]?.[editingMetric] || 0);
-                             
+                            (monthData?.days[editingDay]?.[editingMetric] || 0);
+        
+        // Only track as pending edit if the value has changed
         if (currentValue !== originalValue) {
           setPendingEdits(prev => ({
             ...prev,
@@ -231,95 +220,115 @@ const MonthlyDataTab = ({
           }));
           setHasUnsavedChanges(true);
         }
+        
+        // Clear edit state but don't save to backend
+        handleDayEdit("", "", 0);
       }
-      
-      // Clear edit state without saving to backend
-      handleDayEdit("", "", 0);
-    }
-    else if (e.key === 'Escape') {
-      // Cancel editing without saving
+    } else if (e.key === 'Escape') {
+      // Cancel editing on Escape key
+      e.preventDefault();
       handleDayEdit("", "", 0);
     }
   };
   
-  // Batch save all pending edits - ONLY triggered by Save All Changes button
+  // Batch save all pending edits - triggered by the Save button
   const saveAllPendingEdits = async () => {
-    const pendingEditsCount = Object.keys(pendingEdits).length;
-    if (pendingEditsCount === 0) {
-      alert("No changes to save");
+    console.log("saveAllPendingEdits called with:", pendingEdits);
+    
+    if (Object.keys(pendingEdits).length === 0) {
+      console.log("No pending edits to save");
       return;
     }
-
-    try {
-      // First ensure we're not in editing mode
-      if (editingDay && editingMetric) {
-        // Add current edit to pending edits before saving
-        const currentValue = parseFloat(dayValue);
-        if (!isNaN(currentValue)) {
-          const key = `${editingDay}-${editingMetric}`;
-          const originalValue = monthData?.days[editingDay]?.[editingMetric] || 0;
-          
-          pendingEdits[key] = {
+    
+    // If we're currently editing a cell, add it to pending edits
+    if (editingDay && editingMetric) {
+      const key = `${editingDay}-${editingMetric}`;
+      const currentValue = Math.round(parseFloat(dayValue));
+      if (!isNaN(currentValue)) {
+        const originalValue = pendingEdits[key]?.originalValue || 
+                            (monthData?.days[editingDay]?.[editingMetric] || 0);
+                            
+        if (currentValue !== originalValue) {
+          // Clone the pendingEdits object to avoid direct state mutation
+          const updatedPendingEdits = { ...pendingEdits };
+          updatedPendingEdits[key] = {
             metric: editingMetric,
             value: currentValue,
             originalValue
           };
-          
-          // Clear edit state
-          handleDayEdit("", "", 0);
+          setPendingEdits(updatedPendingEdits);
+          console.log(`Added current edit for ${key}: ${currentValue}`);
         }
       }
       
-      // Set loading states - both local and parent
-      setIsSaving(true);
-      if (setLoading) setLoading(true);
-      
-      // Format the pending edits for the parent handler
-      const formattedEdits: Record<string, { metric: string; value: number }> = {};
-      
-      // Track edits being sent for better user feedback
-      console.log(`Preparing to save ${Object.keys(pendingEdits).length} changes`);
-      
-      for (const [key, edit] of Object.entries(pendingEdits)) {
-        formattedEdits[key] = {
-          metric: edit.metric,
-          value: edit.value
-        };
-        console.log(`Edit for ${key}: ${edit.value} (was ${edit.originalValue})`);
+      // Clear edit state
+      handleDayEdit("", "", 0);
+    }
+    
+    // Create a simplified version of pendingEdits without originalValue for parent component
+    const simplifiedEdits: Record<string, { metric: string; value: number }> = {};
+    
+    for (const key in pendingEdits) {
+      const { metric, value } = pendingEdits[key];
+      simplifiedEdits[key] = { 
+        metric, 
+        value: Math.round(value) // Ensure all values are integers
+      };
+      console.log(`Preparing to save ${key}: ${metric} = ${Math.round(value)}`);
+    }
+    
+    console.log("Processing edits:", simplifiedEdits);
+    
+    if (handleSaveAllPendingEdits) {
+      try {
+        console.log("Calling parent handleSaveAllPendingEdits with:", simplifiedEdits);
+        // Pass the simplified edits to the parent function
+        const saveSuccess = await handleSaveAllPendingEdits(simplifiedEdits);
+        
+        // Only clear pendingEdits after successful save
+        if (saveSuccess !== false) {
+          setPendingEdits({});
+          setHasUnsavedChanges(false);
+          console.log("All changes saved successfully via parent handler");
+        } else {
+          console.log("Some edits may have failed, keeping unsaved changes state");
+        }
+      } catch (error) {
+        console.error("Error during save:", error);
+        alert(`Failed to save changes: ${error instanceof Error ? error.message : "Unknown error occurred"}`);
       }
-      
-      // Call the parent's handler to save changes to the backend
-      if (!handleSaveAllPendingEdits) {
-        throw new Error("Save function not available");
-      }
-      
-      // Wait for all changes to be saved
-      await handleSaveAllPendingEdits(formattedEdits);
-      
-      // Clear pending edits and reset state after successful save
-      setPendingEdits({});
-      setHasUnsavedChanges(false);
-      
-      console.log("All changes saved successfully!");
-      
-      setIsSaving(false);
-      if (setLoading) setLoading(false);
-    } catch (error) {
-      console.error("Error saving changes:", error);
-      setIsSaving(false);
-      if (setLoading) setLoading(false);
-      
-      // Provide specific error messages
-      if (isFirebaseQuotaError(error)) {
-        alert("Firebase quota exceeded. Please try again later or contact support.");
-      } else {
-        alert(`Failed to save changes: ${error instanceof Error ? error.message : "Unknown error"}`);
-      }
+    } else {
+      console.error("No handleSaveAllPendingEdits provided by parent component");
+      alert("Cannot save changes - save function not available");
     }
   };
 
   // Cell edit handler - should NOT save to backend, only update local state
   const handleCellEdit = (day: string, metric: string, currentValue: number) => {
+    // If we're already editing a cell, save that edit first
+    if (editingDay && editingMetric) {
+      const key = `${editingDay}-${editingMetric}`;
+      const value = parseFloat(dayValue);
+      
+      if (!isNaN(value)) {
+        const originalValue = pendingEdits[key]?.originalValue || 
+                           (monthData?.days[editingDay]?.[editingMetric] || 0);
+                            
+        // Only track as pending edit if the value has changed
+        if (value !== originalValue) {
+          setPendingEdits(prev => ({
+            ...prev,
+            [key]: {
+              metric: editingMetric,
+              value: value,
+              originalValue
+            }
+          }));
+          setHasUnsavedChanges(true);
+        }
+      }
+    }
+    
     // If we already have a pending edit for this cell, use that value
     const pendingValue = pendingEdits[`${day}-${metric}`]?.value;
     
@@ -335,7 +344,7 @@ const MonthlyDataTab = ({
     // Update pending edits if we're editing a cell
     if (editingDay && editingMetric) {
       const key = `${editingDay}-${editingMetric}`;
-      const currentValue = parseFloat(newValue);
+      const currentValue = Math.round(parseFloat(newValue));
       
       if (!isNaN(currentValue)) {
         const originalValue = pendingEdits[key]?.originalValue || 
@@ -354,53 +363,16 @@ const MonthlyDataTab = ({
           setHasUnsavedChanges(true);
         } else {
           // If value is back to original, remove from pending edits
-          if (pendingEdits[key]) {
-            const newPendingEdits = {...pendingEdits};
-            delete newPendingEdits[key];
-            setPendingEdits(newPendingEdits);
-            
-            // Only clear unsaved changes flag if no pending edits remain
-            if (Object.keys(newPendingEdits).length === 0) {
-              setHasUnsavedChanges(false);
-            }
+          const newPendingEdits = {...pendingEdits};
+          delete newPendingEdits[key];
+          setPendingEdits(newPendingEdits);
+          
+          // Only clear unsaved changes flag if no pending edits remain
+          if (Object.keys(newPendingEdits).length === 0) {
+            setHasUnsavedChanges(false);
           }
         }
       }
-    }
-  };
-
-  // Save a single day edit
-  const saveDayEdit = () => {
-    if (!editingDay || !editingMetric) return;
-    
-    const currentValue = parseFloat(dayValue);
-    if (isNaN(currentValue)) {
-      alert("Please enter a valid number");
-      return;
-    }
-    
-    try {
-      // Add the current edit to pending edits
-      const key = `${editingDay}-${editingMetric}`;
-      const originalValue = monthData?.days[editingDay]?.[editingMetric] || 0;
-      
-      if (currentValue !== originalValue) {
-        setPendingEdits(prev => ({
-          ...prev,
-          [key]: {
-            metric: editingMetric,
-            value: currentValue,
-            originalValue
-          }
-        }));
-        setHasUnsavedChanges(true);
-      }
-      
-      // Clear editing state but don't save to backend yet
-      handleDayEdit("", "", 0);
-    } catch (error) {
-      console.error("Error saving day edit:", error);
-      alert("Failed to save edit. Please try again.");
     }
   };
 
@@ -599,12 +571,6 @@ const MonthlyDataTab = ({
               </h3>
               <p className="text-gray-600 mb-4">
                 Click on any value in the table to edit it directly. Use Tab to navigate between cells.
-                {hasUnsavedChanges && (
-                  <span className="ml-2 text-blue-600 font-medium">
-                    <span className="inline-block w-3 h-3 bg-blue-600 rounded-full animate-pulse mr-1 align-middle"></span>
-                    You have unsaved changes
-                  </span>
-                )}
               </p>
 
               <div className="overflow-x-auto">
@@ -644,7 +610,7 @@ const MonthlyDataTab = ({
                               >
                                 {editingDay === day &&
                                 editingMetric === metric ? (
-                                  <div className="flex items-center space-x-2">
+                                  <div className="flex items-center">
                                     <input
                                       ref={(el) => { inputRefs.current[key] = el; }}
                                       type="number"
@@ -652,11 +618,7 @@ const MonthlyDataTab = ({
                                       value={dayValue}
                                       onChange={handleInputChange}
                                       onKeyDown={(e) => handleKeyDown(e, day, metric)}
-                                      autoFocus
-                                    />
-                                    <button
-                                      className="p-1 text-green-600 hover:text-green-800"
-                                      onClick={() => {
+                                      onBlur={() => {
                                         // Add current edit to pending edits
                                         const currentValue = parseFloat(dayValue);
                                         if (!isNaN(currentValue) && editingDay && editingMetric) {
@@ -680,46 +642,8 @@ const MonthlyDataTab = ({
                                         // Clear edit state without saving to backend
                                         handleDayEdit("", "", 0);
                                       }}
-                                      title="Add to pending changes"
-                                    >
-                                      <svg
-                                        className="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M5 13l4 4L19 7"
-                                        />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      className="p-1 text-red-600 hover:text-red-800"
-                                      onClick={() => {
-                                        // Reset editing state
-                                        handleDayEdit("", "", 0);
-                                      }}
-                                      title="Cancel"
-                                    >
-                                      <svg
-                                        className="w-4 h-4"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M6 18L18 6M6 6l12 12"
-                                        />
-                                      </svg>
-                                    </button>
+                                      autoFocus
+                                    />
                                   </div>
                                 ) : (
                                   <div
@@ -770,70 +694,22 @@ const MonthlyDataTab = ({
                 </table>
               </div>
               
-              {/* Instructions for users */}
-              <div className="mt-4 p-4 bg-blue-50 text-blue-700 rounded-md border border-blue-200">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-blue-800">How to edit values:</h3>
-                    <div className="mt-2 text-sm">
-                      <ul className="list-disc pl-5 space-y-1">
-                        <li>Click on any value to edit it</li>
-                        <li>Press <span className="font-bold">Enter</span> or click the checkmark to confirm the edit</li>
-                        <li>Press <span className="font-bold">Tab</span> to navigate between cells</li>
-                        <li>Press <span className="font-bold">Escape</span> to cancel the edit</li>
-                        <li>Modified values will appear in <span className="text-blue-600 font-medium">blue</span></li>
-                        <li>Click <span className="font-bold">SAVE ALL CHANGES</span> to submit all edits to the server</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Common Submit Button */}
+              {/* Edits info section */}
               {(hasUnsavedChanges || Object.keys(pendingEdits).length > 0) && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200 p-4 z-50">
-                  <div className="container mx-auto flex justify-between items-center">
-                    <div className="font-medium text-gray-700">
-                      <span className="text-blue-600 font-bold">{Object.keys(pendingEdits).length}</span> unsaved {Object.keys(pendingEdits).length === 1 ? 'change' : 'changes'}
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-blue-700">
+                      <p className="font-medium">You have {Object.keys(pendingEdits).length} unsaved changes</p>
+                      <p className="text-sm">Click on a cell to edit, press Tab to move between cells, Enter to confirm, or Escape to cancel.</p>
                     </div>
                     <button
                       onClick={saveAllPendingEdits}
-                      disabled={isSaving}
-                      className={`px-8 py-3 rounded-md transition-all font-bold text-lg shadow-lg flex items-center
-                        ${isSaving
-                          ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
-                          : 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-                        }`}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
                     >
-                      {isSaving ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          SAVING CHANGES...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          SAVE ALL CHANGES
-                        </>
-                      )}
+                      Save
                     </button>
                   </div>
                 </div>
-              )}
-              
-              {/* Add padding at bottom when save button is shown for better UX */}
-              {(hasUnsavedChanges || Object.keys(pendingEdits).length > 0) && (
-                <div className="h-20"></div> // Space to prevent content from being hidden behind fixed button
               )}
             </div>
           )}

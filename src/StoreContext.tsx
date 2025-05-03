@@ -46,11 +46,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const fetchStoreInfo = async () => {
       try {
-        // Always use the current store ID if available
-        const storeId = currentStoreId || defaultStoreId;
-        
-        const settings = await getStoreSettings(storeId || undefined);
-        setStoreName(settings.storeName);
+        // Check if we're in "default analytics" mode
+        if (currentStoreId === null && defaultStoreId) {
+          // When currentStoreId is explicitly null, we should fetch the default analytics settings
+          const settings = await getStoreSettings("default");
+          setStoreName(settings.storeName);
+          console.log("StoreContext: Fetched default analytics store settings:", settings.storeName);
+        } else {
+          // Use the current store ID if available
+          const storeId = currentStoreId || defaultStoreId;
+          const settings = await getStoreSettings(storeId || undefined);
+          setStoreName(settings.storeName);
+          console.log("StoreContext: Fetched store settings for:", storeId, ":", settings.storeName);
+        }
       } catch (error) {
         console.error("Error fetching store info:", error);
       }
