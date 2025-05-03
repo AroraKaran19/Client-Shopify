@@ -19,7 +19,6 @@ interface DataEntryModalProps {
   currentDayOfMonth: number;
   isCurrentMonth: boolean;
   saveDailyValue: () => void;
-  saveHourlyData: () => void;
   saveMonthlyData: () => void;
   onSelectMetric: (metric: string) => void;
   graphLabels: string[];
@@ -43,7 +42,6 @@ const DataEntryModal = ({
   currentDayOfMonth,
   isCurrentMonth,
   saveDailyValue,
-  saveHourlyData,
   saveMonthlyData,
   onSelectMetric,
   graphLabels,
