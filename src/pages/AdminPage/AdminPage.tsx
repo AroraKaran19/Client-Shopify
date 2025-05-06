@@ -12,6 +12,7 @@ import {
   removeDefaultAnalyticsStore,
   GraphType,
   updateDailyTotal,
+  updateDateData,
 } from "@/firebase/firebase";
 import {
   format,
@@ -559,11 +560,14 @@ const AdminPage = () => {
 
     try {
       setLoading(true);
+      
+      // Explicitly set dailyMode to true to ensure proper hourly distribution
       await addDayData(
         date,
         value,
         selectedMetric as keyof DayData,
-        isEditingDefault ? "default" : currentStoreId || undefined
+        isEditingDefault ? "default" : currentStoreId || undefined,
+        true // Force hourly breakdown
       );
 
       setDayData((prev) => ({
@@ -607,11 +611,13 @@ const AdminPage = () => {
           i === daysInMonth.length - 1 ? remainingValue : valuePerDay;
         remainingValue -= dayValue;
 
+        // Make sure to specify dailyMode = true to force hourly breakdown
         await addDayData(
           dateStr,
           dayValue,
           selectedMetric as keyof DayData,
-          isEditingDefault ? "default" : currentStoreId || undefined
+          isEditingDefault ? "default" : currentStoreId || undefined,
+          true // Ensure we always distribute values across 24 hours
         );
       }
 
@@ -808,6 +814,7 @@ const AdminPage = () => {
         }
 
         try {
+          // Use updateDailyTotal which properly handles hourly breakdown
           const result = await updateDailyTotal(
             day,
             numericValue,
@@ -883,6 +890,55 @@ const AdminPage = () => {
     const newData = [...editableHourlyData];
     newData[index] = isNaN(numValue) ? 0 : numValue;
     setEditableHourlyData(newData);
+  };
+
+  const saveHourlyData = async () => {
+    if (!selectedMetric || !date) return;
+
+    try {
+      setLoading(true);
+      
+      // Create the updated data object with the current metric's hourly data
+      const updatedData: any = {};
+      updatedData[selectedMetric] = [...editableHourlyData];
+      
+      // Update the Firebase document
+      await updateDateData(
+        date,
+        updatedData,
+        isEditingDefault ? "default" : currentStoreId || undefined
+      );
+      
+      // Update local state to reflect changes
+      if (hourlyData) {
+        const updatedHourlyData = { ...hourlyData };
+        updatedHourlyData[selectedMetric as keyof DateData] = timeLabelsRef.current.map(
+          (time, index) => ({
+            time,
+            value: editableHourlyData[index] || 0,
+          })
+        );
+        setHourlyData(updatedHourlyData);
+      }
+      
+      // Update day totals
+      const totalValue = editableHourlyData.reduce((sum, val) => sum + val, 0);
+      setDayData(prev => ({
+        ...prev,
+        [selectedMetric]: totalValue,
+      }));
+      
+      closeModal();
+      setLoading(false);
+    } catch (error) {
+      console.error("Error saving hourly data:", error);
+      setLoading(false);
+      alert(
+        `Failed to save hourly data: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
   };
 
   const saveDayData = () => {
@@ -1390,7 +1446,16 @@ const AdminPage = () => {
 
             {/* Modal Footer */}
             <div className="modal-footer flex justify-end gap-2 p-4 border-t">
-            <button
+              {modalType === "hour" && (
+                <button
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  onClick={saveHourlyData}
+                  disabled={!selectedMetric}
+                >
+                  Save
+                </button>
+              )}
+              <button
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
                 onClick={closeModal}
               >

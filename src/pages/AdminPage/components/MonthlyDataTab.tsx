@@ -136,8 +136,12 @@ const MonthlyDataTab = ({
   
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, day: string, metric: string) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
+    // Process Tab or Arrow key navigation
+    if (e.key === 'Tab' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (e.key === 'Tab' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        // Prevent default behavior for Tab and vertical arrows
+        e.preventDefault();
+      }
       
       // Save current cell value to pendingEdits but DON'T send to backend
       const currentValue = Math.round(parseFloat(dayValue));
@@ -161,28 +165,68 @@ const MonthlyDataTab = ({
       }
       
       // Get all the days and metrics to determine next/previous cell
-      const days = Object.keys(monthData?.days || {}).sort();
+      const days = Object.keys(getValidDays()).sort();
       const dayIndex = days.indexOf(day);
       const metricIndex = graphs.indexOf(metric);
       
-      // Calculate next cell indices
+      // Calculate next cell indices based on key pressed
       let nextDayIndex = dayIndex;
       let nextMetricIndex = metricIndex;
       
-      if (e.shiftKey) {
-        // Tab + Shift goes backwards
+      if (e.key === 'Tab' && e.shiftKey) {
+        // Shift+Tab - Move up
+        if (dayIndex > 0) {
+          // If not at the first day, go up one day in the same column
+          nextDayIndex = dayIndex - 1;
+        } else {
+          // If at the first day of a column, go to the previous column's last day
+          if (metricIndex > 0) {
+            nextMetricIndex = metricIndex - 1;
+            nextDayIndex = days.length - 1;
+          } else {
+            // If at the first day of the first column, wrap to the last day of the last column
+            nextMetricIndex = graphs.length - 1;
+            nextDayIndex = days.length - 1;
+          }
+        }
+      } else if (e.key === 'Tab' || e.key === 'ArrowDown') {
+        // Tab or Down Arrow - Move down
+        if (dayIndex < days.length - 1) {
+          // If not at the last day, go down one day in the same column
+          nextDayIndex = dayIndex + 1;
+        } else {
+          // If at the last day of a column, go to the next column's first day
+          if (metricIndex < graphs.length - 1) {
+            nextMetricIndex = metricIndex + 1;
+            nextDayIndex = 0;
+          } else {
+            // If at the last day of the last column, wrap to the first day of the first column
+            nextMetricIndex = 0;
+            nextDayIndex = 0;
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        // Up Arrow - Move up
+        if (dayIndex > 0) {
+          nextDayIndex = dayIndex - 1;
+        } else {
+          // When at the top of a column, wrap to the bottom of the same column
+          nextDayIndex = days.length - 1;
+        }
+      } else if (e.key === 'ArrowLeft') {
+        // Left Arrow - Move to previous column, same row
         if (metricIndex > 0) {
           nextMetricIndex = metricIndex - 1;
-        } else if (dayIndex > 0) {
-          nextDayIndex = dayIndex - 1;
+        } else {
+          // If at the first column, wrap to the last column
           nextMetricIndex = graphs.length - 1;
         }
-      } else {
-        // Tab goes forwards
+      } else if (e.key === 'ArrowRight') {
+        // Right Arrow - Move to next column, same row
         if (metricIndex < graphs.length - 1) {
           nextMetricIndex = metricIndex + 1;
-        } else if (dayIndex < days.length - 1) {
-          nextDayIndex = dayIndex + 1;
+        } else {
+          // If at the last column, wrap to the first column
           nextMetricIndex = 0;
         }
       }
@@ -570,7 +614,7 @@ const MonthlyDataTab = ({
                 Daily Breakdown
               </h3>
               <p className="text-gray-600 mb-4">
-                Click on any value in the table to edit it directly. Use Tab to navigate between cells.
+                Click on any value in the table to edit it directly. Use Tab to navigate down through cells (moves to next column at the bottom). Use arrow keys for navigation in all directions.
               </p>
 
               <div className="overflow-x-auto">

@@ -26,9 +26,15 @@ Chart.register(
 const MulitAxisChartPercent = ({
   data,
   showLabel,
+  showTooltip,
+  smallGraph,
+  className,
 }: {
   data: ChartData;
   showLabel?: boolean;
+  showTooltip?: boolean;
+  smallGraph?: boolean;
+  className?: string;
 }) => {
   const chartData = {
     labels: data.labels,
@@ -48,7 +54,7 @@ const MulitAxisChartPercent = ({
     stacked: false,
     plugins: {
       legend: {
-        display: true,
+        display: smallGraph ? false : true,
         position: "bottom" as const,
         labels: {
           font: {
@@ -60,6 +66,7 @@ const MulitAxisChartPercent = ({
         },
       },
       tooltip: {
+        enabled: showTooltip ?? true,
         callbacks: {
           label: function (context: any) {
             let label = context.dataset.label || "";
@@ -80,10 +87,11 @@ const MulitAxisChartPercent = ({
     },
     scales: {
       y: {
+        display: smallGraph ? false : true,
         min: 0,
         max: 100,
         grid: {
-          display: true,
+          display: smallGraph ? false : true,
           color: "#ddd",
         },
         ticks: {
@@ -100,6 +108,7 @@ const MulitAxisChartPercent = ({
         },
       },
       x: {
+        display: smallGraph ? false : true,
         grid: {
           display: false,
         },
@@ -119,10 +128,10 @@ const MulitAxisChartPercent = ({
   return (
     <Line
       data={chartData}
-      height={100}
+      height={smallGraph ? 30 : 100}
       width={100}
       options={{ ...options, maintainAspectRatio: false }}
-      className="max-w-full max-h-full"
+      className={`max-w-full max-h-full ${className}`}
     />
   );
 };

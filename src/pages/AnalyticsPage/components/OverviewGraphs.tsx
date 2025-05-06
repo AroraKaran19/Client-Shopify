@@ -6,6 +6,7 @@ import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
 import { formatCurrency } from "../utils";
 import { differenceInDays } from "date-fns";
+import MulitAxisChartPercent from "@/components/Graphs/MulitAxisChartPercent";
 
 type OverviewData = {
   name: string;
@@ -39,7 +40,11 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
             d.setDate(d.getDate() + 1)
           ) {
             labels.push(
-              d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
+              d.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "2-digit",
+              })
             );
           }
         }
@@ -175,13 +180,35 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                               (acc, curr) =>
                                 acc +
                                 (Array.isArray(curr.data)
-                                  ? Math.floor(curr.data.reduce((a, b) => a + b, 0))
+                                  ? Math.floor(
+                                      curr.data.reduce((a, b) => a + b, 0)
+                                    )
                                   : 0),
                               0
                             )
                             .toString()
                         )
                       )
+                    : item.type === "percent"
+                    ? eval(
+                        (fetchedData[
+                          item.name.replace(/\s+/g, "_").toLowerCase()
+                        ].dataset
+                          .reduce(
+                            (acc, curr) =>
+                              acc +
+                              (Array.isArray(curr.data)
+                                ? Math.floor(
+                                    curr.data.reduce((a, b) => a + b, 0)
+                                  )
+                                : curr.data),
+                            0
+                          ) / (fetchedData?.returning_customer_rate.dataset?.[0]?.label.includes("-") && Array.isArray(fetchedData?.returning_customer_rate.dataset?.[0]?.data) 
+                          ? fetchedData?.returning_customer_rate.dataset?.[0]?.data.length 
+                          : Number(fetchedData?.returning_customer_rate.dataset?.[0]?.data) || 1))
+                          .toFixed(1)
+                          .toString()
+                      ) + "%"
                     : eval(
                         fetchedData[
                           item.name.replace(/\s+/g, "_").toLowerCase()
@@ -190,7 +217,9 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                             (acc, curr) =>
                               acc +
                               (Array.isArray(curr.data)
-                                ? Math.ceil(curr.data.reduce((a, b) => a + b, 0))
+                                ? Math.ceil(
+                                    curr.data.reduce((a, b) => a + b, 0)
+                                  )
                                 : curr.data),
                             0
                           )
@@ -214,23 +243,40 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                 ) == "0" && <MinusIcon className="size-4 text-[#303030]" />}
             </div>
             <div className="graph-container bg-[#f5f5f5] rounded-lg w-full h-[20px] overflow-y-visible">
-              {fetchedData ? (
-                <MultiAxisChart
-                  data={{
-                    labels: moreThanOneDay
-                      ? generateLabels("date")
-                      : generateLabels("time"),
-                    datasets:
-                      fetchedData[item.name.replace(/\s+/g, "_").toLowerCase()]
-                        .dataset,
-                  }}
-                  smallGraph={true}
-                  className="!h-[30px] bg-white"
-                  showTooltip={false}
-                />
-              ) : (
-                <div></div>
-              )}
+              {fetchedData && (
+                item.type === "number" || item.type === "ruppee" ? (
+                  <MultiAxisChart
+                      data={{
+                        labels: moreThanOneDay
+                          ? generateLabels("date")
+                          : generateLabels("time"),
+                        datasets:
+                          fetchedData[
+                            item.name.replace(/\s+/g, "_").toLowerCase()
+                          ].dataset,
+                      }}
+                      smallGraph={true}
+                      className="!h-[30px] bg-white"
+                      showTooltip={false}
+                    />
+                ) : (
+                  item.type === "percent" && (
+                  <MulitAxisChartPercent
+                    data={{
+                      labels: moreThanOneDay
+                        ? generateLabels("date")
+                        : generateLabels("time"),
+                      datasets:
+                        fetchedData[
+                          item.name.replace(/\s+/g, "_").toLowerCase()
+                        ].dataset,
+                    }}
+                    smallGraph={true}
+                    className="!h-[30px] bg-white"
+                    showTooltip={false}
+                  />
+                )
+              ))}
             </div>
           </div>
         </div>

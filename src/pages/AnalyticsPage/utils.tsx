@@ -1,12 +1,6 @@
 import { JSX } from "react";
 
 export const formatCurrency = (amount: number) => {
-  if (amount >= 1000000) {
-    return `₹${(amount / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
-  }
-  if (amount >= 1000) {
-    return `₹${(amount / 1000).toFixed(1).replace(/\.0$/, '')}k`;
-  }
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",

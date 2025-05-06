@@ -140,129 +140,111 @@ export async function addDayData(
     
     const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      // If in daily mode, we need to distribute the value across 24 hours
-      if (dailyMode) {
-        // Calculate the value per hour for even distribution as integers
-        const valuePerHour = Math.floor(value / 24);
-        const remainder = value % 24;
-        
-        // Create the array with integer values
-        const newValues = new Array(24).fill(valuePerHour);
-        
-        // Distribute the remainder across the first few hours to ensure the total is correct
-        for (let i = 0; i < remainder; i++) {
-          newValues[i]++;
-        }
-        
-        console.log(`Firebase: Updating ${graph} with distributed integer values`);
-        
-        // Update the document with the new values
+    // Simplified approach: always create an equal distribution of values
+    // across all 24 hours, regardless of whether the document exists or not
+    if (dailyMode) {
+      // For exact even distribution, we use the exact value divided by 24
+      // and ensure each hour gets an equal amount (with potential tiny floating point differences)
+      const exactValuePerHour = value / 24;
+      
+      // Create the array with the exact hourly values
+      const newValues = Array(24).fill(0).map(() => exactValuePerHour);
+      
+      // Ensure the array totals exactly to the input value by adjusting the last hour if needed
+      const sum = newValues.reduce((a, b) => a + b, 0);
+      if (sum !== value) {
+        const difference = value - sum;
+        newValues[23] += difference; // Add any tiny rounding difference to the last hour
+      }
+      
+      console.log(`Firebase: Setting ${graph} with exact equal distribution`);
+      
+      // Update the document with the new values
+      if (docSnap.exists()) {
         await updateDoc(docRef, {
-          [graph]: newValues
+          [graph]: newValues.map(v => Number(v.toFixed(6))) // Fix to 6 decimal places to avoid floating point issues
         });
       } else {
-        // In non-daily mode, we need to get the existing array and update it
-        // This is likely called from the monthly data page
+        // Create the document first, then update with our graph data
+        await addData(date, storeId);
+        await updateDoc(docRef, {
+          [graph]: newValues.map(v => Number(v.toFixed(6)))
+        });
+      }
+    } else {
+      // Non-daily mode (updating existing pattern)
+      if (docSnap.exists()) {
         const existingData = docSnap.data();
         let existingArray = existingData[graph];
         
-        // If there's no existing array or it's invalid, create a new one
         if (!Array.isArray(existingArray) || existingArray.length !== 24) {
-          // Calculate the value per hour for even distribution as integers
-          const valuePerHour = Math.floor(value / 24);
-          const remainder = value % 24;
+          // If no valid array, create an equal distribution
+          const exactValuePerHour = value / 24;
+          const newValues = Array(24).fill(0).map(() => exactValuePerHour);
           
-          // Create the array with integer values
-          const newValues = new Array(24).fill(valuePerHour);
-          
-          // Distribute the remainder across the first few hours to ensure the total is correct
-          for (let i = 0; i < remainder; i++) {
-            newValues[i]++;
+          // Ensure the array totals exactly to the input value
+          const sum = newValues.reduce((a, b) => a + b, 0);
+          if (sum !== value) {
+            const difference = value - sum;
+            newValues[23] += difference;
           }
           
           await updateDoc(docRef, {
-            [graph]: newValues
-          });
-          return;
-        }
-        
-        console.log(`Firebase: Updating ${graph} with existing array, total=${value}`);
-        
-        // We're preserving the existing distribution pattern but scaling to the new total
-        const currentTotal = existingArray.reduce((sum: number, val: number) => sum + (val || 0), 0);
-        
-        if (currentTotal === 0) {
-          // If current total is 0, distribute evenly
-          const valuePerHour = Math.floor(value / 24);
-          const remainder = value % 24;
-          
-          // Create the array with integer values
-          const newValues = new Array(24).fill(valuePerHour);
-          
-          // Distribute the remainder across the first few hours to ensure the total is correct
-          for (let i = 0; i < remainder; i++) {
-            newValues[i]++;
-          }
-          
-          await updateDoc(docRef, {
-            [graph]: newValues
+            [graph]: newValues.map(v => Number(v.toFixed(6)))
           });
         } else {
-          // Otherwise scale proportionally
-          const scalingFactor = value / currentTotal;
+          // We have a valid array, preserve pattern but scale to new total
+          const currentTotal = existingArray.reduce((sum, val) => sum + (val || 0), 0);
           
-          // Scale each hourly value proportionally, ensuring they're integers
-          const initialValues = existingArray.map((hourValue: number) => 
-            Math.floor(hourValue * scalingFactor)
-          );
-          
-          // Calculate how far off we are from the target value
-          const initialTotal = initialValues.reduce((sum: number, val: number) => sum + val, 0);
-          const remainder = value - initialTotal;
-          
-          // Create the final array with adjusted values
-          const newValues = [...initialValues];
-          
-          // If there's a remainder, distribute it across non-zero values or all values if all are zero
-          if (remainder > 0) {
-            const nonZeroIndices = newValues.map((v, i) => v > 0 ? i : -1).filter(i => i >= 0);
-            const indicesToAdjust = nonZeroIndices.length > 0 ? nonZeroIndices : Array.from({ length: 24 }, (_, i) => i);
+          if (currentTotal === 0) {
+            // If current total is 0, use equal distribution
+            const exactValuePerHour = value / 24;
+            const newValues = Array(24).fill(0).map(() => exactValuePerHour);
             
-            // Distribute the remainder
-            for (let i = 0; i < remainder; i++) {
-              const indexToAdjust = indicesToAdjust[i % indicesToAdjust.length];
-              newValues[indexToAdjust]++;
+            const sum = newValues.reduce((a, b) => a + b, 0);
+            if (sum !== value) {
+              const difference = value - sum;
+              newValues[23] += difference;
             }
+            
+            await updateDoc(docRef, {
+              [graph]: newValues.map(v => Number(v.toFixed(6)))
+            });
+          } else {
+            // Scale proportionally, maintaining the pattern
+            const scalingFactor = value / currentTotal;
+            const newValues = existingArray.map(hourValue => hourValue * scalingFactor);
+            
+            // Ensure the array totals exactly to the input value
+            const sum = newValues.reduce((a, b) => a + b, 0);
+            if (Math.abs(sum - value) > 0.0001) { // Using a small epsilon for floating point comparison
+              const difference = value - sum;
+              newValues[23] += difference;
+            }
+            
+            await updateDoc(docRef, {
+              [graph]: newValues.map(v => Number(v.toFixed(6)))
+            });
           }
-          
-          await updateDoc(docRef, {
-            [graph]: newValues
-          });
         }
+      } else {
+        // Document doesn't exist, create it with equal distribution
+        await addData(date, storeId);
+        
+        const exactValuePerHour = value / 24;
+        const newValues = Array(24).fill(0).map(() => exactValuePerHour);
+        
+        // Ensure the array totals exactly to the input value
+        const sum = newValues.reduce((a, b) => a + b, 0);
+        if (sum !== value) {
+          const difference = value - sum;
+          newValues[23] += difference;
+        }
+        
+        await updateDoc(docRef, {
+          [graph]: newValues.map(v => Number(v.toFixed(6)))
+        });
       }
-    } else {
-      // Initialize the document with default values
-      console.log(`Firebase: Document doesn't exist, creating it first`);
-      await addData(date, storeId);
-      
-      // Then update with the specific graph data
-      const valuePerHour = Math.floor(value / 24);
-      const remainder = value % 24;
-      
-      // Create the array with integer values
-      const newValues = new Array(24).fill(valuePerHour);
-      
-      // Distribute the remainder across the first few hours to ensure the total is correct
-      for (let i = 0; i < remainder; i++) {
-        newValues[i]++;
-      }
-      
-      console.log(`Firebase: Setting ${graph} with evenly distributed integer values`);
-      
-      await updateDoc(docRef, {
-        [graph]: newValues
-      });
     }
     
     console.log(`Firebase: Successfully updated ${graph} for ${date}`);
@@ -1056,136 +1038,40 @@ export async function updateDailyTotal(
     
     const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      const existingData = docSnap.data();
-      let existingArray = existingData[graph];
-      
-      // If there's no existing array or it's invalid, create a new one with even distribution
-      if (!Array.isArray(existingArray) || existingArray.length !== 24) {
-        console.log(`Firebase: No valid existing array found for ${graph}, creating evenly distributed values`);
-        const valuePerHour = Math.floor(value / 24);
-        const remainder = value % 24;
-        
-        // Create the array with integer values
-        const newValues = new Array(24).fill(valuePerHour);
-        
-        // Distribute the remainder across the first few hours to ensure the total is correct
-        for (let i = 0; i < remainder; i++) {
-          newValues[i]++;
-        }
-        
-        try {
-          await updateDoc(docRef, {
-            [graph]: newValues
-          });
-          console.log(`Firebase: Successfully created new array for ${graph} with even distribution`);
-          return { success: true };
-        } catch (updateError) {
-          console.error(`Firebase: Error creating new array: ${updateError}`);
-          throw updateError;
-        }
-      }
-      
-      // Calculate the current total
-      const currentTotal = existingArray.reduce((sum: number, val: number) => sum + (val || 0), 0);
-      
-      // Handle the special case where current total is 0
-      if (currentTotal === 0 || isNaN(currentTotal)) {
-        console.log(`Firebase: Current total is ${currentTotal}, distributing ${value} evenly`);
-        const valuePerHour = Math.floor(value / 24);
-        const remainder = value % 24;
-        
-        // Create the array with integer values
-        const newValues = new Array(24).fill(valuePerHour);
-        
-        // Distribute the remainder across the first few hours to ensure the total is correct
-        for (let i = 0; i < remainder; i++) {
-          newValues[i]++;
-        }
-        
-        try {
-          await updateDoc(docRef, {
-            [graph]: newValues
-          });
-          console.log(`Firebase: Successfully distributed ${value} evenly across 24 hours`);
-          return { success: true };
-        } catch (updateError) {
-          console.error(`Firebase: Error distributing value evenly: ${updateError}`);
-          throw updateError;
-        }
-      }
-      
-      // Calculate the scaling factor to adjust the values
-      const scalingFactor = value / currentTotal;
-      console.log(`Firebase: Current total=${currentTotal}, new total=${value}, scaling factor=${scalingFactor}`);
-      
-      // Scale each hourly value proportionally, ensuring they're integers
-      const initialValues = existingArray.map((hourValue: number) => 
-        Math.floor(hourValue * scalingFactor)
-      );
-      
-      // Calculate how far off we are from the target value
-      const initialTotal = initialValues.reduce((sum: number, val: number) => sum + val, 0);
-      const remainder = value - initialTotal;
-      
-      // Create the final array with adjusted values
-      const newValues = [...initialValues];
-      
-      // If there's a remainder, distribute it across non-zero values or all values if all are zero
-      if (remainder > 0) {
-        const nonZeroIndices = newValues.map((v, i) => v > 0 ? i : -1).filter(i => i >= 0);
-        const indicesToAdjust = nonZeroIndices.length > 0 ? nonZeroIndices : Array.from({ length: 24 }, (_, i) => i);
-        
-        // Distribute the remainder
-        for (let i = 0; i < remainder; i++) {
-          const indexToAdjust = indicesToAdjust[i % indicesToAdjust.length];
-          newValues[indexToAdjust]++;
-        }
-      }
-      
-      console.log(`Firebase: Updating ${graph} with scaled integer values, preserving distribution pattern`);
-      
-      // Update the document with the new values
-      try {
+    // For consistency with addDayData, always use exact equal distribution
+    // Calculate the exact value per hour
+    const exactValuePerHour = value / 24;
+    
+    // Create an array with exactly equal values
+    const newValues = Array(24).fill(0).map(() => exactValuePerHour);
+    
+    // Ensure the total is exactly the input value
+    const sum = newValues.reduce((a, b) => a + b, 0);
+    if (sum !== value) {
+      const difference = value - sum;
+      newValues[23] += difference; // Add any tiny rounding difference to the last hour
+    }
+    
+    console.log(`Firebase: Setting ${graph} with exact equal distribution`);
+    
+    try {
+      if (docSnap.exists()) {
         await updateDoc(docRef, {
-          [graph]: newValues
+          [graph]: newValues.map(v => Number(v.toFixed(6))) // Fix to 6 decimal places to avoid floating point issues
         });
-        console.log(`Firebase: Successfully updated ${graph} for ${date} to total ${value}`);
-        return { success: true };
-      } catch (updateError) {
-        console.error(`Firebase: Error updating document with scaled values: ${updateError}`);
-        throw updateError;
-      }
-    } else {
-      // Document doesn't exist, create it with evenly distributed values
-      console.log(`Firebase: Document doesn't exist for ${date}, creating it`);
-      try {
+      } else {
+        // Document doesn't exist, create it with equal distribution
         await addData(date, storeId);
-        
-        // Distribute the value evenly with integer values
-        const valuePerHour = Math.floor(value / 24);
-        const remainder = value % 24;
-        
-        // Create the array with integer values
-        const newValues = new Array(24).fill(valuePerHour);
-        
-        // Distribute the remainder across the first few hours to ensure the total is correct
-        for (let i = 0; i < remainder; i++) {
-          newValues[i]++;
-        }
-        
-        console.log(`Firebase: Setting ${graph} with evenly distributed integer values`);
-        
         await updateDoc(docRef, {
-          [graph]: newValues
+          [graph]: newValues.map(v => Number(v.toFixed(6)))
         });
-        
-        console.log(`Firebase: Successfully created and updated ${graph} for ${date}`);
-        return { success: true };
-      } catch (createError) {
-        console.error(`Firebase: Error creating new document: ${createError}`);
-        throw createError;
       }
+      
+      console.log(`Firebase: Successfully updated ${graph} for ${date} to total ${value}`);
+      return { success: true };
+    } catch (updateError) {
+      console.error(`Firebase: Error updating document: ${updateError}`);
+      throw updateError;
     }
   } catch (e) {
     if (e instanceof FirebaseError) {

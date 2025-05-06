@@ -376,8 +376,9 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                             : data.data),
                         0
                       ) /
-                      (data?.conversion_rate_over_time.dataset?.length * 24 ||
-                        0)
+                      (data?.conversion_rate_over_time.dataset?.[0]?.label.includes("-") && Array.isArray(data?.conversion_rate_over_time.dataset?.[0]?.data) 
+                        ? data?.conversion_rate_over_time.dataset?.[0]?.data.length 
+                        : Number(data?.conversion_rate_over_time.dataset?.[0]?.data) || 1)
                     )
                       .toFixed(1)
                       .toString() + "%") ||
