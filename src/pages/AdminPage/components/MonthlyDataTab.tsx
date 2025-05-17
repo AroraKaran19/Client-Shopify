@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
+import MonthDataCopy from "./MonthDataCopy";
 
 interface MonthData {
   days: {
@@ -38,8 +39,8 @@ interface MonthlyDataTabProps {
   editingMetric: string | null;
   dayValue: string;
   setDayValue: (value: string) => void;
-  saveDayEdit: () => void;
   handleSaveAllPendingEdits?: (pendingEdits: Record<string, { metric: string; value: number }>) => Promise<boolean | void>;
+  onCopyMonth?: (targetMonth: number, targetYear: number) => Promise<void>;
 }
 
 const MonthlyDataTab = ({
@@ -68,7 +69,8 @@ const MonthlyDataTab = ({
   editingMetric,
   dayValue,
   setDayValue,
-  handleSaveAllPendingEdits
+  handleSaveAllPendingEdits,
+  onCopyMonth
 }: MonthlyDataTabProps) => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [pendingEdits, setPendingEdits] = useState<{
@@ -105,13 +107,33 @@ const MonthlyDataTab = ({
     
     const filteredDays: {[key: string]: {[key: string]: number}} = {};
     
+    // Format month start/end to YYYY-MM-DD for string comparison
+    const monthStartStr = format(monthStart, "yyyy-MM");
+    
+    // Filter days to only include days from the selected month
     Object.entries(monthData.days).forEach(([dateStr, metrics]) => {
-      const date = new Date(dateStr);
-      // Only include dates that belong to the selected month and year
-      if (date >= monthStart && date <= monthEnd) {
+      // Check if the date belongs to the current month by comparing year-month
+      if (dateStr.startsWith(monthStartStr)) {
         filteredDays[dateStr] = metrics;
       }
     });
+    
+    // If we don't have entries for all days in the month, fill in the missing ones
+    const daysInMonth = monthEnd.getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(selectedYear, selectedMonth, day);
+      const dateStr = format(date, "yyyy-MM-dd");
+      
+      if (!filteredDays[dateStr]) {
+        // Add empty data for this day
+        filteredDays[dateStr] = {};
+        
+        // Initialize all metrics to zero
+        graphs.forEach(metric => {
+          filteredDays[dateStr][metric] = 0;
+        });
+      }
+    }
     
     return filteredDays;
   };
@@ -429,15 +451,15 @@ const MonthlyDataTab = ({
         </p>
       </div>
 
-      <div className="month-select mb-6 flex flex-wrap gap-4">
-        <div className="flex-1 min-w-[200px]">
+      <div className="month-selector mb-6 flex flex-wrap md:flex-nowrap items-center gap-4">
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Select Month
           </label>
           <select
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             value={selectedMonth}
-            onChange={(e) => handleMonthYearChange('month', parseInt(e.target.value))}
+            onChange={(e) => handleMonthYearChange('month', Number(e.target.value))}
           >
             {months.map((month) => (
               <option key={month} value={month}>
@@ -447,14 +469,14 @@ const MonthlyDataTab = ({
           </select>
         </div>
 
-        <div className="flex-1 min-w-[200px]">
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Select Year
           </label>
           <select
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
             value={selectedYear}
-            onChange={(e) => handleMonthYearChange('year', parseInt(e.target.value))}
+            onChange={(e) => handleMonthYearChange('year', Number(e.target.value))}
           >
             {years.map((year) => (
               <option key={year} value={year}>
@@ -464,6 +486,16 @@ const MonthlyDataTab = ({
           </select>
         </div>
       </div>
+
+      {/* Month Data Copy Component */}
+      {onCopyMonth && (
+        <MonthDataCopy
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          availableYears={years}
+          onCopyMonth={onCopyMonth}
+        />
+      )}
 
       {monthData && (
         <div className="month-data">
@@ -546,13 +578,9 @@ const MonthlyDataTab = ({
                 Bulk Distribution
               </h3>
               <p className="text-gray-600 mb-4">
-                {isCurrentMonth
-                  ? `Enter the total value for ${getMonthName(
-                      selectedMonth
-                    )} ${selectedYear} (first ${currentDayOfMonth} days only). This value will be distributed evenly across all days that have passed so far.`
-                  : `Enter the total value for ${getMonthName(
-                      selectedMonth
-                    )} ${selectedYear}. This value will be distributed evenly across all days of the month.`}
+                Enter the total value for {getMonthName(
+                  selectedMonth
+                )} {selectedYear}. This value will be distributed evenly across all days of the month.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -599,11 +627,7 @@ const MonthlyDataTab = ({
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    This will evenly distribute the total across{" "}
-                    {isCurrentMonth
-                      ? `only the first ${currentDayOfMonth} days`
-                      : "all days"}{" "}
-                    in {getMonthName(selectedMonth)}.
+                    This will evenly distribute the total across all days in {getMonthName(selectedMonth)}.
                   </p>
                 </div>
               </div>
@@ -639,8 +663,9 @@ const MonthlyDataTab = ({
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {Object.entries(getValidDays()).map(
-                      ([day, metrics]) => (
+                    {Object.entries(getValidDays())
+                      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                      .map(([day, metrics]) => (
                         <tr key={day} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {format(new Date(day), "MMM d, yyyy")}

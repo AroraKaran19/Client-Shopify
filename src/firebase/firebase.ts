@@ -1,8 +1,9 @@
 import { FirebaseError, initializeApp } from "firebase/app";
-import { doc, getDoc, getFirestore, setDoc, updateDoc, addDoc } from "firebase/firestore";
+import { doc, getDoc, getFirestore, setDoc, updateDoc, addDoc, deleteDoc } from "firebase/firestore";
 import { getAuth, signInAnonymously } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { differenceInDays } from "date-fns";
+import { format } from "date-fns";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -1011,6 +1012,143 @@ export async function removeDefaultAnalyticsStore() {
       console.log(`Firebase Error: (${e.code})`);
     } else {
       console.error("Error removing default analytics store:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to delete a store and all its related data
+export async function deleteStore(storeId: string) {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    // Check if this is the default analytics store
+    const defaultStoreId = await getDefaultAnalyticsStore();
+    if (defaultStoreId === storeId) {
+      // Remove it as the default store first
+      await removeDefaultAnalyticsStore();
+    }
+
+    // Delete the store document from the stores collection
+    const storeRef = doc(db, "stores", storeId);
+    await deleteDoc(storeRef);
+
+    // Delete the store settings document
+    const settingsRef = doc(db, "settings", storeId);
+    await deleteDoc(settingsRef);
+
+    // Delete any analytics data for this store
+    // Get all analytics docs for this store
+    const analyticsQuery = query(collection(db, "analytics"), where("storeId", "==", storeId));
+    const analyticsSnapshot = await getDocs(analyticsQuery);
+    
+    // Delete each analytics document
+    const deletionPromises = analyticsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletionPromises);
+    
+    return { success: true };
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error deleting store:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to copy data from one month to another month
+export async function copyMonthData(
+  sourceMonth: number,
+  sourceYear: number,
+  targetMonth: number,
+  targetYear: number,
+  storeId?: string
+) {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    // Create date ranges for source and target months
+    const sourceMonthStart = new Date(sourceYear, sourceMonth, 1);
+    const sourceMonthEnd = new Date(sourceYear, sourceMonth + 1, 0); // Last day of source month
+    
+    const targetMonthEnd = new Date(targetYear, targetMonth + 1, 0); // Last day of target month
+
+    // Get collection path for the store
+    const collectionPath = getCollectionPath(storeId);
+    
+    // Get the source month data
+    const sourceData: Record<string, any> = {};
+    const sourceDatesQuery = query(
+      collection(db, collectionPath),
+      where("__name__", ">=", format(sourceMonthStart, "yyyy-MM-dd")),
+      where("__name__", "<=", format(sourceMonthEnd, "yyyy-MM-dd"))
+    );
+    
+    const sourceQuerySnapshot = await getDocs(sourceDatesQuery);
+    sourceQuerySnapshot.forEach((doc) => {
+      sourceData[doc.id] = doc.data();
+    });
+
+    // If no source data found, throw error
+    if (Object.keys(sourceData).length === 0) {
+      throw new Error(`No data found for ${sourceMonthStart.toLocaleString('default', { month: 'long' })} ${sourceYear}`);
+    }
+
+    // Prepare batch operations for copying data to target month
+    const batch = [];
+    
+    // Get days in source month
+    const daysInSourceMonth = sourceMonthEnd.getDate();
+    // Get days in target month
+    const daysInTargetMonth = targetMonthEnd.getDate();
+    
+    // For each day in the target month, find corresponding source day
+    for (let day = 1; day <= daysInTargetMonth; day++) {
+      const targetDate = new Date(targetYear, targetMonth, day);
+      const targetDateStr = format(targetDate, "yyyy-MM-dd");
+      
+      // Find the closest matching day from source month
+      // For simple 1:1 mapping, we just use the same day number if it exists
+      let sourceDay = day;
+      
+      // If target month has more days than source month, reuse the last day
+      if (sourceDay > daysInSourceMonth) {
+        sourceDay = daysInSourceMonth;
+      }
+      
+      const sourceDate = new Date(sourceYear, sourceMonth, sourceDay);
+      const sourceDateStr = format(sourceDate, "yyyy-MM-dd");
+      
+      // If source data exists for this day, copy it to target
+      if (sourceData[sourceDateStr]) {
+        batch.push({
+          targetDate: targetDateStr,
+          data: sourceData[sourceDateStr]
+        });
+      }
+    }
+    
+    // Execute all the write operations
+    const writePromises = batch.map(item => 
+      setDoc(doc(db, collectionPath, item.targetDate), item.data)
+    );
+    
+    await Promise.all(writePromises);
+    
+    return { 
+      success: true, 
+      copyCount: writePromises.length,
+      sourceDays: Object.keys(sourceData).length,
+      targetDays: daysInTargetMonth
+    };
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error copying month data:", e);
     }
     throw e;
   }

@@ -13,6 +13,7 @@ interface StoreSelectorProps {
   onStoreChange: (storeId: string, isDefault: boolean) => void;
   onSetDefaultStore: (storeId: string) => Promise<void>;
   onRemoveDefaultStore: () => Promise<void>;
+  onDeleteStore: (storeId: string) => Promise<void>;
 }
 
 const StoreSelector = ({
@@ -22,10 +23,12 @@ const StoreSelector = ({
   defaultAnalyticsStoreId,
   onStoreChange,
   onSetDefaultStore,
-  onRemoveDefaultStore
+  onRemoveDefaultStore,
+  onDeleteStore
 }: StoreSelectorProps) => {
   const [isSettingDefault, setIsSettingDefault] = useState(false);
   const [isRemovingDefault, setIsRemovingDefault] = useState(false);
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
 
   const handleSetDefaultStore = async () => {
     if (!currentStoreId || isEditingDefault) return;
@@ -44,6 +47,20 @@ const StoreSelector = ({
       await onRemoveDefaultStore();
     } finally {
       setIsRemovingDefault(false);
+    }
+  };
+
+  const handleDeleteStore = async () => {
+    if (!currentStoreId || isEditingDefault) return;
+    
+    // Confirm delete action
+    if (window.confirm(`Are you sure you want to delete "${availableStores.find(s => s.id === currentStoreId)?.name || currentStoreId}"? This action cannot be undone.`)) {
+      try {
+        setIsDeletingStore(true);
+        await onDeleteStore(currentStoreId);
+      } finally {
+        setIsDeletingStore(false);
+      }
     }
   };
 
@@ -107,6 +124,18 @@ const StoreSelector = ({
               disabled={isRemovingDefault}
             >
               {isRemovingDefault ? "Removing..." : "Remove Default"}
+            </button>
+          )}
+          
+          {/* Delete store button */}
+          {currentStoreId && !isEditingDefault && (
+            <button
+              className="p-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors whitespace-nowrap disabled:opacity-70"
+              onClick={handleDeleteStore}
+              title="Delete this store and all related data"
+              disabled={isDeletingStore}
+            >
+              {isDeletingStore ? "Deleting..." : "Delete Store"}
             </button>
           )}
         </div>

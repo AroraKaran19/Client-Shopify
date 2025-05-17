@@ -13,6 +13,8 @@ import {
   GraphType,
   updateDailyTotal,
   updateDateData,
+  deleteStore,
+  copyMonthData,
 } from "@/firebase/firebase";
 import {
   format,
@@ -432,11 +434,10 @@ const AdminPage = () => {
         const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
         const monthEnd = endOfMonth(monthStart);
 
-        const effectiveEndDate = isCurrentMonth ? today : monthEnd;
-
+        // Always use the full month range, regardless of current date
         const daysInMonth = eachDayOfInterval({
           start: monthStart,
-          end: effectiveEndDate,
+          end: monthEnd,
         });
 
         const newMonthData: MonthData = {
@@ -491,7 +492,6 @@ const AdminPage = () => {
     selectedYear,
     currentStoreId,
     isEditingDefault,
-    isCurrentMonth,
     activeTab,
   ]);
 
@@ -593,12 +593,12 @@ const AdminPage = () => {
       setLoading(true);
 
       const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
+      const monthEnd = endOfMonth(monthStart);
 
-      const effectiveEndDate = isCurrentMonth ? today : endOfMonth(monthStart);
-
+      // Always use the complete month, even for future dates
       const daysInMonth = eachDayOfInterval({
         start: monthStart,
-        end: effectiveEndDate,
+        end: monthEnd,
       });
 
       const valuePerDay = Math.round(totalValue / daysInMonth.length);
@@ -722,61 +722,6 @@ const AdminPage = () => {
     setEditingDay(day);
     setEditingMetric(metric);
     setDayValue(Math.round(currentValue).toString());
-  };
-
-  const saveDayEdit = async () => {
-    if (!editingDay || !editingMetric || !monthData) return;
-
-    const value = Math.round(parseFloat(dayValue));
-    if (isNaN(value)) return;
-
-    try {
-      setLoading(true);
-
-      try {
-        await updateDailyTotal(
-        editingDay,
-        value,
-        editingMetric as keyof DayData,
-        isEditingDefault ? "default" : currentStoreId || undefined
-      );
-      } catch (saveError: unknown) {
-        console.error("Error saving day edit to Firebase:", saveError);
-        const errorMessage =
-          saveError instanceof Error ? saveError.message : "Unknown error";
-        throw new Error(`Failed to save day edit: ${errorMessage}`);
-      }
-
-      // Update local state after successful save
-      const updatedMonthData = { ...monthData };
-
-      // Calculate difference for the monthly total
-      const oldValue = updatedMonthData.days[editingDay]?.[editingMetric] || 0;
-      const difference = value - oldValue;
-
-      // Update day value
-      if (!updatedMonthData.days[editingDay]) {
-        updatedMonthData.days[editingDay] = {};
-      }
-      updatedMonthData.days[editingDay][editingMetric] = value;
-
-      updatedMonthData.totals[editingMetric] =
-        (updatedMonthData.totals[editingMetric] || 0) + difference;
-
-      setMonthData(updatedMonthData);
-      setEditingDay(null);
-      setEditingMetric(null);
-      setDayValue("");
-      setLoading(false);
-    } catch (error) {
-      console.error("Error saving day value:", error);
-      setLoading(false);
-      alert(
-        `Failed to save changes: ${
-          error instanceof Error ? error.message : "Please try again."
-        }`
-      );
-    }
   };
 
   const handleSaveAllPendingEdits = async (
@@ -949,6 +894,89 @@ const AdminPage = () => {
     saveMonthlyData();
   };
 
+  // Add a function to copy month data
+  const handleCopyMonth = async (targetMonth: number, targetYear: number) => {
+    try {
+      setLoading(true);
+      
+      const result = await copyMonthData(
+        selectedMonth,
+        selectedYear,
+        targetMonth,
+        targetYear,
+        isEditingDefault ? "default" : currentStoreId
+      );
+      
+      // Show success message
+      alert(`Successfully copied ${result.copyCount} days of data from ${getMonthName(selectedMonth)} ${selectedYear} to ${getMonthName(targetMonth)} ${targetYear}.`);
+      
+      // If target month is currently selected, refresh the data
+      if (targetMonth === selectedMonth && targetYear === selectedYear) {
+        // Create date range for the selected month
+        const monthStart = startOfMonth(new Date(selectedYear, selectedMonth));
+        const monthEnd = endOfMonth(monthStart);
+
+        const daysInMonth = eachDayOfInterval({
+          start: monthStart,
+          end: monthEnd,
+        });
+
+        const newMonthData: MonthData = {
+          days: {},
+          totals: {},
+        };
+
+        GRAPHS.forEach((metric) => {
+          newMonthData.totals[metric] = 0;
+        });
+
+        for (const day of daysInMonth) {
+          const dateStr = format(day, "yyyy-MM-dd");
+          const dayData = await fetchData(
+            dateStr,
+            isEditingDefault ? "default" : currentStoreId
+          );
+
+          // Store day data
+          newMonthData.days[dateStr] = {};
+
+          // Process each metric
+          for (const metric of GRAPHS) {
+            // Calculate day total for this metric
+            const metricData = dayData[metric] || new Array(24).fill(0);
+            const dayTotal = Array.isArray(metricData)
+              ? metricData.reduce(
+                  (sum, val) => sum + (typeof val === "number" ? val : 0),
+                  0
+                )
+              : 0;
+
+            // Add to daily record
+            newMonthData.days[dateStr][metric] = dayTotal;
+
+            // Add to monthly total
+            newMonthData.totals[metric] += dayTotal;
+          }
+        }
+
+        setMonthData(newMonthData);
+      }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error copying month data:", error);
+      setLoading(false);
+      alert(`Failed to copy month data: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  // Add effect to handle redirect from /admin to /admin/default
+  useEffect(() => {
+    if (!storeId) {
+      navigate('/admin/default');
+    }
+  }, [storeId, navigate]);
+
   return (
     <div className="admin-page h-full w-full p-4 md:p-6 relative bg-gray-50">
       {/* Page Header */}
@@ -974,12 +1002,12 @@ const AdminPage = () => {
             defaultAnalyticsStoreId={defaultAnalyticsStoreId}
             onStoreChange={(storeId, isDefault) => {
               if (isDefault) {
-                        setIsEditingDefault(true);
-                        setCurrentStoreId("default");
+                setIsEditingDefault(true);
+                setCurrentStoreId("default");
                 setGlobalStoreId(null); // Update global context
-                        navigate(`/admin/default`);
-                      } else {
-                        setIsEditingDefault(false);
+                navigate(`/admin/default`);
+              } else {
+                setIsEditingDefault(false);
                 setCurrentStoreId(storeId);
                 setGlobalStoreId(storeId); // Update global context
                 navigate(`/admin/${storeId}`);
@@ -1033,6 +1061,34 @@ const AdminPage = () => {
                 console.error("Error removing default analytics store:", error);
                 alert(
                   `Failed to remove default analytics store: ${
+                    error instanceof Error ? error.message : "Unknown error"
+                  }`
+                );
+              } finally {
+                setLoading(false);
+              }
+            }}
+            onDeleteStore={async (storeId) => {
+              try {
+                setLoading(true);
+                await deleteStore(storeId);
+                
+                // Update UI after deletion
+                const stores = await getAllStores();
+                setAvailableStores(stores);
+                
+                // Navigate to default page after deletion
+                setIsEditingDefault(true);
+                setCurrentStoreId("default");
+                setGlobalStoreId(null);
+                navigate('/admin/default');
+                
+                // Show success message
+                alert('Store successfully deleted!');
+              } catch (error) {
+                console.error("Error deleting store:", error);
+                alert(
+                  `Failed to delete store: ${
                     error instanceof Error ? error.message : "Unknown error"
                   }`
                 );
@@ -1107,7 +1163,6 @@ const AdminPage = () => {
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               value={date}
             onChange={(e) => setDate(e.target.value)}
-              max={format(new Date(), "yyyy-MM-dd")}
             />
           </div>
 
@@ -1198,8 +1253,8 @@ const AdminPage = () => {
           editingMetric={editingMetric}
           dayValue={dayValue}
           setDayValue={setDayValue}
-          saveDayEdit={saveDayEdit}
           handleSaveAllPendingEdits={handleSaveAllPendingEdits}
+          onCopyMonth={handleCopyMonth}
         />
       )}
 
