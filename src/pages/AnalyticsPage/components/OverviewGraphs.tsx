@@ -4,7 +4,7 @@ import MultiAxisChart from "@/components/Graphs/MultiAxisChart";
 import { formatDate, GraphInputData } from "./GraphContent";
 import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
-import { formatCurrency } from "../utils";
+import { formatCurrency, formatNumber } from "../utils";
 import { differenceInDays } from "date-fns";
 import MulitAxisChartPercent from "@/components/Graphs/MulitAxisChartPercent";
 
@@ -209,7 +209,7 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                           .toFixed(1)
                           .toString()
                       ) + "%"
-                    : eval(
+                    : formatNumber(
                         fetchedData[
                           item.name.replace(/\s+/g, "_").toLowerCase()
                         ].dataset
@@ -223,7 +223,6 @@ const OverviewGraphs = ({ storeId }: OverviewGraphsProps) => {
                                 : curr.data),
                             0
                           )
-                          .toString()
                       ))}
               </span>
               {fetchedData &&

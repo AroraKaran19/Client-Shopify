@@ -11,6 +11,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import { ChartData } from "./MultiAxisChart";
+import { useMemo } from "react";
 
 Chart.register(
   CategoryScale,
@@ -36,6 +37,48 @@ const MulitAxisChartPercent = ({
   smallGraph?: boolean;
   className?: string;
 }) => {
+  // Calculate dynamic max and step values
+  const { dynamicMax, stepSize } = useMemo(() => {
+    // Extract all data values from datasets
+    const allValues: number[] = [];
+    data.datasets.forEach(dataset => {
+      if (Array.isArray(dataset.data)) {
+        allValues.push(...dataset.data);
+      } else {
+        allValues.push(dataset.data);
+      }
+    });
+
+    if (allValues.length === 0) {
+      return { dynamicMax: 100, stepSize: 10 };
+    }
+
+    const maxValue = Math.max(...allValues);
+    
+    // Calculate dynamic max with 100 as super max
+    let calculatedMax;
+    if (maxValue >= 100) {
+      calculatedMax = 100;
+    } else {
+      calculatedMax = Math.min(100, maxValue + 2);
+    }
+
+    // Calculate step size based on the range
+    const range = calculatedMax;
+    let calculatedStepSize;
+    if (range <= 10) {
+      calculatedStepSize = 1;
+    } else if (range <= 20) {
+      calculatedStepSize = 2;
+    } else if (range <= 50) {
+      calculatedStepSize = 5;
+    } else {
+      calculatedStepSize = 50;
+    }
+
+    return { dynamicMax: calculatedMax, stepSize: calculatedStepSize };
+  }, [data]);
+
   const chartData = {
     labels: data.labels,
     datasets: data.datasets.map((dataset, _) => ({
@@ -51,6 +94,9 @@ const MulitAxisChartPercent = ({
 
   const options = {
     responsive: true,
+    interaction: {
+      intersect: false,
+    },
     stacked: false,
     plugins: {
       legend: {
@@ -89,21 +135,21 @@ const MulitAxisChartPercent = ({
       y: {
         display: smallGraph ? false : true,
         min: 0,
-        max: 100,
+        max: dynamicMax,
         grid: {
           display: smallGraph ? false : true,
           color: "#ddd",
         },
         ticks: {
-          stepSize: 50,
           beginAtZero: true,
+          stepSize: stepSize,
           font: {
             size: 11,
             color: "#70707b",
           },
           color: "#aaa",
           callback: function (value: any) {
-            return value + "%";
+            return Math.round(value) + "%";
           },
         },
       },

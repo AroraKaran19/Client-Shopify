@@ -154,20 +154,20 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                     name: "Conversion rate breakdown",
                     value:
                       (data &&
-                        (
-                          (data?.conversion_rate_breakdown.dataset.reduce(
-                            (prev, data) =>
-                              prev +
-                              (Array.isArray(data.data)
-                                ? data.data.reduce((a, b) => a + b, 0)
-                                : data.data),
-                            0
-                          ) /
-                            data?.conversion_rate_breakdown.dataset?.length) *
-                            24 || 0
-                        )
-                          .toFixed(1)
-                          .toString() + "%") ||
+                        (data?.conversion_rate_breakdown.dataset.reduce(
+                          (prev, data) =>
+                            prev +
+                            (Array.isArray(data.data)
+                              ? data.data.reduce((a, b) => a + b, 0)
+                              : data.data),
+                          0
+                        ) /
+                          Math.max(0, (data?.conversion_rate_breakdown.dataset?.[0]?.label.includes("-") && Array.isArray(data?.conversion_rate_breakdown.dataset?.[0]?.data)
+                            ? data?.conversion_rate_breakdown.dataset?.[0]?.data.length
+                            : Number(data?.conversion_rate_breakdown.dataset?.[0]?.data) || 1))
+                        || 0)
+                        .toFixed(1)
+                        .toString() + "%") ||
                       "",
                     type: "image",
                     dataContent: {
@@ -220,7 +220,10 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                                 ? data.data.reduce((a, b) => a + b, 0)
                                 : data.data),
                             0
-                          )
+                          ) /
+                          (data?.average_order_value_over_time.dataset?.[0]?.label.includes("-") && Array.isArray(data?.average_order_value_over_time.dataset?.[0]?.data)
+                            ? data?.average_order_value_over_time.dataset?.[0]?.data.length
+                            : Number(data?.average_order_value_over_time.dataset?.[0]?.data) || 1)
                         ).toString()) ||
                       "",
                     dataContent: {

@@ -30,6 +30,21 @@ const GraphContainerBox = ({
     }
   }, [graphInfo.type]);
 
+  // Process graphData to ensure no decimal values
+  const processedGraphData = useMemo(() => {
+    if (!graphData) return undefined;
+    
+    return {
+      ...graphData,
+      datasets: graphData.datasets.map(dataset => ({
+        ...dataset,
+        data: Array.isArray(dataset.data) 
+          ? dataset.data.map(value => Math.round(value))
+          : Math.round(dataset.data)
+      }))
+    };
+  }, [graphData]);
+
   return (
     <div
       className={`${graphInfo.name
@@ -60,7 +75,7 @@ const GraphContainerBox = ({
         <div
           className={`graph-container flex items-center justify-center h-full max-h-[calc(100%-38px)] w-full`}
         >
-          {!graphData ? (
+          {!processedGraphData ? (
             graphInfo.type === "image" ? (
               <img src={placeholderImage} alt={placeholderImage} draggable={false} />
             ) : (
@@ -69,17 +84,17 @@ const GraphContainerBox = ({
               </p>
             )
           ) : (
-            (graphInfo.type === "ruppee" && graphData && (
+            (graphInfo.type === "ruppee" && processedGraphData && (
               <MultiAxisChart
-                data={graphData}
+                data={processedGraphData}
                 minMax={graphInfo?.minMax}
                 steps={graphInfo?.steps}
                 showLabel={graphInfo?.showLabel}
                 showTooltip={graphInfo?.showTooltip}
               />
             )) ||
-            (graphInfo.type === "percent" && typeof graphData !== "number" && (
-              <MulitAxisChartPercent data={graphData} showLabel={graphInfo?.showLabel} />
+            (graphInfo.type === "percent" && typeof processedGraphData !== "number" && (
+              <MulitAxisChartPercent data={processedGraphData} showLabel={graphInfo?.showLabel} />
             ))
           )}
         </div>

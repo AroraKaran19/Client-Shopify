@@ -55,8 +55,6 @@ const MonthlyDataTab = ({
   setBulkMonthValue,
   selectedMetric,
   setSelectedMetric,
-  isCurrentMonth,
-  currentDayOfMonth,
   years,
   months,
   graphs,

@@ -8,6 +8,12 @@ export const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+export const formatNumber = (amount: number) => {
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
 export const formatDatasetCurrency = (dataset: number[]) => {
   return dataset.map((value) => Number(formatCurrency(value).replace("₹", "")));
 }

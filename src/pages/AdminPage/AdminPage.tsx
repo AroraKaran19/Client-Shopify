@@ -1002,12 +1002,12 @@ const AdminPage = () => {
             defaultAnalyticsStoreId={defaultAnalyticsStoreId}
             onStoreChange={(storeId, isDefault) => {
               if (isDefault) {
-                setIsEditingDefault(true);
-                setCurrentStoreId("default");
+                        setIsEditingDefault(true);
+                        setCurrentStoreId("default");
                 setGlobalStoreId(null); // Update global context
-                navigate(`/admin/default`);
-              } else {
-                setIsEditingDefault(false);
+                        navigate(`/admin/default`);
+                      } else {
+                        setIsEditingDefault(false);
                 setCurrentStoreId(storeId);
                 setGlobalStoreId(storeId); // Update global context
                 navigate(`/admin/${storeId}`);
