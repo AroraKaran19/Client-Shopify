@@ -949,22 +949,173 @@ export async function getDefaultAnalyticsStore() {
   }
 }
 
-// Function to update store image
+// Interface for store image metadata
+export interface StoreImageMetadata {
+  url: string;
+  publicId: string;
+  imageType: 'default-device-session' | 'default-rate-breakdown' | string;
+  width?: number;
+  height?: number;
+  format?: string;
+  bytes?: number;
+  uploadedAt: string;
+}
+
+// Function to update store image with Cloudinary metadata
 export async function updateStoreImage(imageUrl: string, storeId: string) {
   try {
     // Sign in anonymously
     await signInAnonymously(auth);
 
     const storeRef = doc(db, "stores", storeId);
-    await updateDoc(storeRef, {
-      imageUrl,
-      updatedAt: new Date().toISOString()
-    });
+    
+    // Check if store document exists first
+    const storeSnap = await getDoc(storeRef);
+    if (storeSnap.exists()) {
+      // Update existing document
+      await updateDoc(storeRef, {
+        imageUrl,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      // Create new store document
+      await setDoc(storeRef, {
+        id: storeId,
+        name: storeId === "default" ? "Default Store" : `Store ${storeId}`,
+        imageUrl,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
   } catch (e) {
     if (e instanceof FirebaseError) {
       console.log(`Firebase Error: (${e.code})`);
     } else {
       console.error("Error updating store image:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to save store image metadata to Firestore
+export async function saveStoreImageMetadata(
+  storeId: string,
+  imageMetadata: StoreImageMetadata
+) {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    // Create the document path: images/stores/{storeId}/{imageType}
+    const imageDocRef = doc(db, "images", "stores", storeId, imageMetadata.imageType);
+    
+    // Save the metadata
+    await setDoc(imageDocRef, {
+      ...imageMetadata,
+      storeId,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Also update the store document with the main image URL (for backward compatibility)
+    const storeRef = doc(db, "stores", storeId);
+    
+    // Check if store document exists first
+    const storeSnap = await getDoc(storeRef);
+    if (storeSnap.exists()) {
+      // Update existing document
+      await updateDoc(storeRef, {
+        imageUrl: imageMetadata.url,
+        updatedAt: new Date().toISOString()
+      });
+    } else {
+      // Create new store document
+      await setDoc(storeRef, {
+        id: storeId,
+        name: storeId === "default" ? "Default Store" : `Store ${storeId}`,
+        imageUrl: imageMetadata.url,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    return { success: true };
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error saving store image metadata:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to get store image metadata
+export async function getStoreImageMetadata(
+  storeId: string,
+  imageType: string
+): Promise<StoreImageMetadata | null> {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    const imageDocRef = doc(db, "images", "stores", storeId, imageType);
+    const imageSnap = await getDoc(imageDocRef);
+
+    if (imageSnap.exists()) {
+      return imageSnap.data() as StoreImageMetadata;
+    }
+    return null;
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error getting store image metadata:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to get all store images
+export async function getAllStoreImages(storeId: string): Promise<StoreImageMetadata[]> {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    const imagesQuery = query(collection(db, "images", "stores", storeId));
+    const querySnapshot = await getDocs(imagesQuery);
+    
+    const images: StoreImageMetadata[] = [];
+    querySnapshot.forEach((doc) => {
+      images.push(doc.data() as StoreImageMetadata);
+    });
+
+    return images;
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error getting all store images:", e);
+    }
+    throw e;
+  }
+}
+
+// Function to delete store image metadata
+export async function deleteStoreImageMetadata(
+  storeId: string,
+  imageType: string
+): Promise<void> {
+  try {
+    // Sign in anonymously
+    await signInAnonymously(auth);
+
+    const imageDocRef = doc(db, "images", "stores", storeId, imageType);
+    await deleteDoc(imageDocRef);
+  } catch (e) {
+    if (e instanceof FirebaseError) {
+      console.log(`Firebase Error: (${e.code})`);
+    } else {
+      console.error("Error deleting store image metadata:", e);
     }
     throw e;
   }

@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import ImageManagement from './ImageManagement';
+
 interface StoreSettings {
   storeName: string;
   updatedAt: string;
@@ -8,11 +11,8 @@ interface SettingsTabProps {
   newStoreName: string;
   setNewStoreName: (name: string) => void;
   saveStoreSettings: () => void;
-  selectedImage: File | null;
-  imagePreview: string | null;
-  handleImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleImageUpload: () => void;
   isLoading: boolean;
+  storeId: string;
 }
 
 const SettingsTab = ({
@@ -20,12 +20,10 @@ const SettingsTab = ({
   newStoreName,
   setNewStoreName,
   saveStoreSettings,
-  selectedImage,
-  imagePreview,
-  handleImageChange,
-  handleImageUpload,
-  isLoading
+  isLoading,
+  storeId
 }: SettingsTabProps) => {
+  const [imageLoading, setImageLoading] = useState(false);
   return (
     <div className="tab-content bg-white shadow rounded-lg p-4 md:p-6">
       <div className="section-header mb-6">
@@ -99,36 +97,12 @@ const SettingsTab = ({
         </div>
       )}
 
-      <div className="settings-section mt-8">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Store Image</h2>
-        <div className="store-image-section">
-          <div className="image-preview mb-4 border rounded-lg p-4 bg-gray-50 flex items-center justify-center h-48 w-full max-w-md">
-            {imagePreview ? (
-              <img 
-                src={imagePreview} 
-                alt="Store preview" 
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <div className="placeholder text-gray-400">No image selected</div>
-            )}
-          </div>
-          <div className="flex flex-col gap-3 max-w-md">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="p-2 border border-gray-300 rounded-md w-full"
-            />
-            <button 
-              onClick={handleImageUpload}
-              disabled={!selectedImage || isLoading}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "Uploading..." : "Upload Image"}
-            </button>
-          </div>
-        </div>
+      <div className="settings-section mt-8">      
+        <ImageManagement 
+          storeId={storeId}
+          isLoading={imageLoading}
+          setIsLoading={setImageLoading}
+        />
       </div>
     </div>
   );

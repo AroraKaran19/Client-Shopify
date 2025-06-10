@@ -4,9 +4,7 @@ import GraphContainerBox from "./GraphContainerBox";
 import { LayoutContext } from "@/layout";
 import { fetchAllData } from "@/firebase/firebase";
 import { differenceInDays } from "date-fns";
-
-const conversionRateBreakdownImage = "/default-rate-breakdown.png";
-const sessionByDeviceTypeImage = "/default-device-sessions.png";
+import { useAnalyticsImages } from "@/hooks/useAnalyticsImages";
 
 export interface GraphInputData {
   [key: string]: {
@@ -32,6 +30,7 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
   const { selectedValues } = useContext(LayoutContext);
   const [data, setData] = useState<GraphInputData>();
   const [moreThanOneDay, setMoreThanOneDay] = useState<boolean>(false);
+  const { images: analyticsImages } = useAnalyticsImages(storeId);
 
   const generateLabels = (type: string) => {
     switch (type) {
@@ -73,6 +72,8 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
       );
     }
   };
+
+
 
   useEffect(() => {
     setData(undefined);
@@ -180,7 +181,7 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                     },
                   })}
                   className="h-[344px] !w-full"
-                  placeholderImage={conversionRateBreakdownImage}
+                  placeholderImage={analyticsImages.conversionRateBreakdown}
                 />
                 <GraphContainerBox
                   graphInfo={generateGraphData({
@@ -415,7 +416,7 @@ const GraphContent = ({ storeId }: GraphContentProps) => {
                 },
               })}
               className="h-[344px] !w-full"
-              placeholderImage={sessionByDeviceTypeImage}
+              placeholderImage={analyticsImages.sessionByDeviceType}
             />
             <GraphContainerBox
               graphInfo={generateGraphData({

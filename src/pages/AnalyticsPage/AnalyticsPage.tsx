@@ -47,6 +47,7 @@ const AnalyticsPage = () => {
       } else {
         // If no storeId, set global context to null to use default
         setCurrentStoreId(null);
+        setLocalStoreId("default"); // Use "default" for analytics images
         // The context will handle refreshing automatically
       }
       
