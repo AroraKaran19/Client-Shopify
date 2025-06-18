@@ -15,6 +15,8 @@ import {
   updateDateData,
   deleteStore,
   copyMonthData,
+  copyStoreData,
+  CopyStoreOptions,
 } from "@/firebase/firebase";
 import {
   format,
@@ -971,6 +973,39 @@ const AdminPage = () => {
     }
   };
 
+  // Add a function to copy store data
+  const handleCopyStoreData = async (sourceStoreId: string, targetStoreId: string, options: CopyStoreOptions) => {
+    try {
+      setLoading(true);
+      
+      const result = await copyStoreData(sourceStoreId, targetStoreId, options);
+      
+      // Build success message
+      let successMessage = `Successfully copied data from "${availableStores.find(s => s.id === sourceStoreId)?.name || sourceStoreId}" to "${availableStores.find(s => s.id === targetStoreId)?.name || targetStoreId}"\n\n`;
+      
+      successMessage += `• Analytics data: ${result.analyticsDataCopied} days\n`;
+      
+      if (options.copySettings) {
+        successMessage += `• Store settings: ${result.settingsCopied ? 'Copied' : 'Failed'}\n`;
+      }
+      
+      if (options.copyImages) {
+        successMessage += `• Store images: ${result.imagesCopied} images copied\n`;
+      }
+      
+      if (result.errors.length > 0) {
+        successMessage += `\nWarnings:\n${result.errors.map(error => `• ${error}`).join('\n')}`;
+      }
+      
+      alert(successMessage);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error copying store data:", error);
+      setLoading(false);
+      alert(`Failed to copy store data: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
   // Add effect to handle redirect from /admin to /admin/default
   useEffect(() => {
     if (!storeId) {
@@ -1268,6 +1303,8 @@ const AdminPage = () => {
           saveStoreSettings={saveStoreSettings}
           isLoading={loading}
           storeId={currentStoreId || "default"}
+          availableStores={availableStores}
+          onCopyStoreData={handleCopyStoreData}
         />
       )}
 

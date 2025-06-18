@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import ImageManagement from './ImageManagement';
+import StoreDataCopy from './StoreDataCopy';
+import { CopyStoreOptions } from '@/firebase/firebase';
 
 interface StoreSettings {
   storeName: string;
@@ -13,6 +15,8 @@ interface SettingsTabProps {
   saveStoreSettings: () => void;
   isLoading: boolean;
   storeId: string;
+  availableStores: { id: string; name: string }[];
+  onCopyStoreData: (sourceStoreId: string, targetStoreId: string, options: CopyStoreOptions) => Promise<void>;
 }
 
 const SettingsTab = ({
@@ -21,7 +25,9 @@ const SettingsTab = ({
   setNewStoreName,
   saveStoreSettings,
   isLoading,
-  storeId
+  storeId,
+  availableStores,
+  onCopyStoreData
 }: SettingsTabProps) => {
   const [imageLoading, setImageLoading] = useState(false);
   return (
@@ -97,6 +103,16 @@ const SettingsTab = ({
         </div>
       )}
 
+      {/* Store Data Copy Section */}
+      <div className="settings-section mt-8">
+        <StoreDataCopy
+          currentStoreId={storeId}
+          availableStores={availableStores}
+          onCopyStoreData={onCopyStoreData}
+        />
+      </div>
+
+      {/* Image Management Section */}
       <div className="settings-section mt-8">      
         <ImageManagement 
           storeId={storeId}

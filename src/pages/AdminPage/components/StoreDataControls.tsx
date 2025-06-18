@@ -83,11 +83,16 @@ const StoreDataControls = ({ storeId, availableStores }: StoreDataControlsProps)
       setLoading(true);
       setMessage(null);
       
-      const result = await copyStoreData(storeId, targetStoreId);
+      const result = await copyStoreData(storeId, targetStoreId, {
+        copyType: 'all',
+        overwriteExisting: true,
+        copySettings: false,
+        copyImages: false
+      });
       
       if (result.success) {
         setMessage({
-          text: `Successfully copied ${result.count} days of data to the target store`,
+          text: `Successfully copied ${result.analyticsDataCopied} days of data to the target store`,
           type: 'success'
         });
       }

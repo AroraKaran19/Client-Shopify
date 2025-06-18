@@ -720,30 +720,153 @@ export async function getStoreSummary(storeId: string) {
   }
 }
 
-// Function to copy data from one store to another
-export async function copyStoreData(sourceStoreId: string, targetStoreId: string) {
+export interface CopyStoreOptions {
+  copyType: 'all' | 'dateRange' | 'lastNDays';
+  startDate?: string;
+  endDate?: string;
+  lastNDays?: number;
+  overwriteExisting: boolean;
+  copySettings: boolean;
+  copyImages: boolean;
+}
+
+// Function to copy data from one store to another with advanced options
+export async function copyStoreData(sourceStoreId: string, targetStoreId: string, options: CopyStoreOptions = {
+  copyType: 'all',
+  overwriteExisting: true,
+  copySettings: false,
+  copyImages: false
+}) {
   try {
     // Sign in anonymously
     await signInAnonymously(auth);
     
-    // Get all graph data from the source store
-    const sourceCollectionPath = `stores/${sourceStoreId}/graphData`;
-    const querySnapshot = await getDocs(collection(db, sourceCollectionPath));
+    const results = {
+      success: true,
+      analyticsDataCopied: 0,
+      settingsCopied: false,
+      imagesCopied: 0,
+      errors: [] as string[]
+    };
+
+    // Get source collection path
+    const sourceCollectionPath = getCollectionPath(sourceStoreId);
+    const targetCollectionPath = getCollectionPath(targetStoreId);
     
-    // Create a batch to write all data to the target store
-    const promises = [];
-    
-    // Copy each document to the target store
-    for (const docSnapshot of querySnapshot.docs) {
-      const data = docSnapshot.data();
-      const targetDocRef = doc(db, `stores/${targetStoreId}/graphData`, docSnapshot.id);
-      promises.push(setDoc(targetDocRef, data));
+    // Determine which dates to copy
+    let dateFilter: any = {};
+    if (options.copyType === 'dateRange' && options.startDate && options.endDate) {
+      dateFilter = query(
+        collection(db, sourceCollectionPath),
+        where("__name__", ">=", options.startDate),
+        where("__name__", "<=", options.endDate)
+      );
+    } else if (options.copyType === 'lastNDays' && options.lastNDays) {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - options.lastNDays);
+      
+      const endDateStr = format(endDate, "yyyy-MM-dd");
+      const startDateStr = format(startDate, "yyyy-MM-dd");
+      
+      dateFilter = query(
+        collection(db, sourceCollectionPath),
+        where("__name__", ">=", startDateStr),
+        where("__name__", "<=", endDateStr)
+      );
+    } else {
+      // Copy all data
+      dateFilter = collection(db, sourceCollectionPath);
     }
     
-    // Execute all writes
-    await Promise.all(promises);
+    // Get source data
+    const sourceSnapshot = await getDocs(dateFilter);
     
-    return { success: true, count: promises.length };
+    if (sourceSnapshot.empty) {
+      throw new Error("No data found in source store for the specified criteria");
+    }
+
+    // Copy analytics data
+    const analyticsPromises = [];
+    
+    for (const docSnapshot of sourceSnapshot.docs) {
+      const sourceData = docSnapshot.data();
+      const dateId = docSnapshot.id;
+      
+      if (!options.overwriteExisting) {
+        // Check if target document exists
+        const targetDocRef = doc(db, targetCollectionPath, dateId);
+        const targetDoc = await getDoc(targetDocRef);
+        
+        if (targetDoc.exists()) {
+          continue; // Skip if exists and not overwriting
+        }
+      }
+      
+      const targetDocRef = doc(db, targetCollectionPath, dateId);
+      analyticsPromises.push(setDoc(targetDocRef, sourceData));
+    }
+    
+    // Execute analytics data copy
+    await Promise.all(analyticsPromises);
+    results.analyticsDataCopied = analyticsPromises.length;
+
+    // Copy store settings if requested
+    if (options.copySettings) {
+      try {
+        const sourceSettingsRef = doc(db, "settings", sourceStoreId);
+        const sourceSettings = await getDoc(sourceSettingsRef);
+        
+        if (sourceSettings.exists()) {
+          const settingsData = sourceSettings.data();
+          const targetSettingsRef = doc(db, "settings", targetStoreId);
+          await setDoc(targetSettingsRef, {
+            ...settingsData,
+            updatedAt: new Date().toISOString()
+          });
+          results.settingsCopied = true;
+        }
+        
+        // Also copy store document from stores collection
+        const sourceStoreRef = doc(db, "stores", sourceStoreId);
+        const sourceStore = await getDoc(sourceStoreRef);
+        
+        if (sourceStore.exists()) {
+          const storeData = sourceStore.data();
+          const targetStoreRef = doc(db, "stores", targetStoreId);
+          await setDoc(targetStoreRef, {
+            ...storeData,
+            id: targetStoreId,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (error) {
+        results.errors.push(`Failed to copy settings: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+
+    // Copy store images if requested
+    if (options.copyImages) {
+      try {
+        const sourceImages = await getAllStoreImages(sourceStoreId);
+        
+        for (const imageMetadata of sourceImages) {
+          try {
+            await saveStoreImageMetadata(targetStoreId, {
+              ...imageMetadata,
+              uploadedAt: new Date().toISOString()
+            });
+            results.imagesCopied++;
+          } catch (error) {
+            results.errors.push(`Failed to copy image ${imageMetadata.imageType}: ${error instanceof Error ? error.message : "Unknown error"}`);
+          }
+        }
+      } catch (error) {
+        results.errors.push(`Failed to retrieve source store images: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+    
+    return results;
   } catch (e) {
     if (e instanceof FirebaseError) {
       console.log(`Firebase Error: (${e.code})`);
@@ -973,10 +1096,10 @@ export async function updateStoreImage(imageUrl: string, storeId: string) {
     const storeSnap = await getDoc(storeRef);
     if (storeSnap.exists()) {
       // Update existing document
-      await updateDoc(storeRef, {
-        imageUrl,
-        updatedAt: new Date().toISOString()
-      });
+    await updateDoc(storeRef, {
+      imageUrl,
+      updatedAt: new Date().toISOString()
+    });
     } else {
       // Create new store document
       await setDoc(storeRef, {
